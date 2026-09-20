@@ -1,45 +1,37 @@
 name: Auto Clinical Post to Telegram
 
 on:
-  workflow_dispatch: # मैन्युअल टेस्ट के लिए
+  workflow_dispatch:
   schedule:
-    - cron: '0 4 * * *' # रोज़ाना सुबह भारतीय समयानुसार (IST) 9:30 AM पर ऑटोमैटिक चलेगा
+    - cron: '0 4 * * *'
 
 jobs:
   post-clinical-pearl:
     runs-on: ubuntu-latest
     steps:
-      - name: Generate AI Content and Post to Telegram
+      - name: Generate AI Content and Post
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
         run: |
-          # 1. Gemini AI से कंटेंट जनरेट कराना
+          PROMPT="Write a high-yield ICU Clinical Pearl for critical care nurses. Topic ideas: Arterial line dampening, Noradrenaline vs Vasopressin titration, ABG interpretation, or ventilator weaning pearls. Include bedside pearls with bullet points, emojis, and hashtags #ICUNursing #CriticalCare #Bexyhub. Keep it under 100 words."
+
+          JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{contents: [{parts: [{text: $prompt}]}]}')
+
           RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$GEMINI_API_KEY" \
             -H "Content-Type: application/json" \
-            -d '{
-              "contents": [{
-                "parts": [{
-                  "text": "Write a high-yield ICU Clinical Pearl for critical care nurses. Focus on real bedside ICU practice (e.g., Arterial Line damping, Noradrenaline titration, or ABG analysis). Format: Title with emoji, 3 crisp bedside rationales/bullet points, 1 Never-Miss Rule, and hashtags #ICUNursing #CriticalCare #Bexyhub. Keep it under 100 words."
-                }]
-              }]
-            }')
+            -d "$JSON_PAYLOAD")
 
-          # 2. टेक्स्ट निकालना
-          AI_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
+          POST_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
 
-          if [ -z "$AI_TEXT" ]; then
-            echo "AI Generation Failed. Full Response: $RESPONSE"
+          if [ -z "$POST_TEXT" ]; then
+            echo "Gemini API Error: $RESPONSE"
             exit 1
           fi
 
-          echo "Generated Content:"
-          echo "$AI_TEXT"
+          echo "AI Content generated successfully!"
 
-          # 3. टेलीग्राम चैनल पर पोस्ट भेजना
-          TG_RES=$(curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
+          curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
             --data-urlencode "chat_id=$CHANNEL_ID" \
-            --data-urlencode "text=$AI_TEXT")
-
-          echo "Telegram Response: $TG_RES"
+            --data-urlencode "text=$POST_TEXT"
