@@ -1,17 +1,45 @@
-name: Test Telegram Auto-Post
+name: Auto Clinical Post to Telegram
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # मैन्युअल टेस्ट के लिए
+  schedule:
+    - cron: '0 4 * * *' # रोज़ाना सुबह भारतीय समयानुसार (IST) 9:30 AM पर ऑटोमैटिक चलेगा
 
 jobs:
-  post-to-telegram:
+  post-clinical-pearl:
     runs-on: ubuntu-latest
     steps:
-      - name: Send Direct Telegram Test
+      - name: Generate AI Content and Post to Telegram
         env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
         run: |
-          curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
-            -d "chat_id=$CHANNEL_ID" \
-            -d "text=🔥 Bexy Social Engine: Connection Successful! Autonomous system is active."
+          # 1. Gemini AI से कंटेंट जनरेट कराना
+          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$GEMINI_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "contents": [{
+                "parts": [{
+                  "text": "Write a high-yield ICU Clinical Pearl for critical care nurses. Focus on real bedside ICU practice (e.g., Arterial Line damping, Noradrenaline titration, or ABG analysis). Format: Title with emoji, 3 crisp bedside rationales/bullet points, 1 Never-Miss Rule, and hashtags #ICUNursing #CriticalCare #Bexyhub. Keep it under 100 words."
+                }]
+              }]
+            }')
+
+          # 2. टेक्स्ट निकालना
+          AI_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
+
+          if [ -z "$AI_TEXT" ]; then
+            echo "AI Generation Failed. Full Response: $RESPONSE"
+            exit 1
+          fi
+
+          echo "Generated Content:"
+          echo "$AI_TEXT"
+
+          # 3. टेलीग्राम चैनल पर पोस्ट भेजना
+          TG_RES=$(curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
+            --data-urlencode "chat_id=$CHANNEL_ID" \
+            --data-urlencode "text=$AI_TEXT")
+
+          echo "Telegram Response: $TG_RES"
