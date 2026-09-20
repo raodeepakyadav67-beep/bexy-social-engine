@@ -11,7 +11,7 @@ data = {
 }
 
 res = requests.post(url, json=data)
-print("Response:", res.text)
+print("Telegram Response:", res.text)
 
 if res.status_code != 200:
     raise Exception(f"Failed: {res.text}")
