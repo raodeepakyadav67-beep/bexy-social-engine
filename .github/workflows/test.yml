@@ -16,30 +16,33 @@ jobs:
           CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
           LINKEDIN_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
         run: |
-          # 1. Gemini API Call (स्थिर मॉडल और ऑटो-रीट्राई के साथ)
           PROMPT="Write a high-yield ICU Clinical Pearl for critical care nurses. Topics: Arterial line dampening, Noradrenaline titration, ABG interpretation, or ventilator pearls. Include bedside rules, bullet points, emojis, and hashtags #ICUNursing #CriticalCare #Bexyhub. Keep it under 90 words."
 
           JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{contents: [{parts: [{text: $prompt}]}]}')
 
-          echo "Generating content with gemini-2.5-flash..."
-          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$GEMINI_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "$JSON_PAYLOAD")
+          POST_TEXT=""
+          # 503 लोड से बचने के लिए कई मॉडल्स की लिस्ट और ऑटो-रीट्राई
+          MODELS=("gemini-2.5-flash" "gemini-2.5-flash-lite" "gemini-3.5-flash" "gemini-1.5-flash")
 
-          POST_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
-
-          # यदि 503 ओवरलोड आए तो तुरंत दूसरे मॉडल पर फ़ॉलबैक
-          if [ -z "$POST_TEXT" ]; then
-            echo "Primary model busy, switching to gemini-2.5-pro..."
-            sleep 2
-            RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=$GEMINI_API_KEY" \
+          for MODEL in "${MODELS[@]}"; do
+            echo "Attempting with model: $MODEL..."
+            RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=$GEMINI_API_KEY" \
               -H "Content-Type: application/json" \
               -d "$JSON_PAYLOAD")
-            POST_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
-          fi
+
+            CANDIDATE=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
+            if [ -n "$CANDIDATE" ]; then
+              POST_TEXT="$CANDIDATE"
+              echo "✅ Success with $MODEL!"
+              break
+            else
+              echo "⚠️ $MODEL was busy or unavailable. Trying next model in 3 seconds..."
+              sleep 3
+            fi
+          done
 
           if [ -z "$POST_TEXT" ]; then
-            echo "Gemini API Error: $RESPONSE"
+            echo "❌ All models failed. Last response: $RESPONSE"
             exit 1
           fi
 
