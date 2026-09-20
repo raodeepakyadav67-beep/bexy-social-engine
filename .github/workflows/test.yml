@@ -9,29 +9,55 @@ jobs:
   post-clinical-pearl:
     runs-on: ubuntu-latest
     steps:
-      - name: Generate AI Content and Post
+      - name: Generate and Post
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
         run: |
-          PROMPT="Write a high-yield ICU Clinical Pearl for critical care nurses. Topic ideas: Arterial line dampening, Noradrenaline vs Vasopressin titration, ABG interpretation, or ventilator weaning pearls. Include bedside pearls with bullet points, emojis, and hashtags #ICUNursing #CriticalCare #Bexyhub. Keep it under 100 words."
-
-          JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{contents: [{parts: [{text: $prompt}]}]}')
-
-          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$GEMINI_API_KEY" \
+          # 1. Gemini API Call
+          RES=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$GEMINI_API_KEY" \
             -H "Content-Type: application/json" \
-            -d "$JSON_PAYLOAD")
+            -d '{
+              "contents": [{
+                "parts": [{
+                  "text": "Write an ICU clinical pearl for nurses under 75 words with bullet points and #ICUNursing #Bexyhub."
+                }]
+              }]
+            }')
 
-          POST_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
+          echo "Full API Response:"
+          echo "$RES"
 
-          if [ -z "$POST_TEXT" ]; then
-            echo "Gemini API Error: $RESPONSE"
-            exit 1
-          fi
+          # 2. Extract Text using Python (jq dependency removed)
+          python3 -c '
+          import json, os, sys, requests
 
-          echo "AI Content generated successfully!"
+          raw = sys.stdin.read()
+          body = raw.split("HTTP_STATUS:")[0].strip()
+          
+          try:
+              data = json.loads(body)
+          except Exception as e:
+              print("Invalid JSON:", body)
+              sys.exit(1)
 
-          curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
-            --data-urlencode "chat_id=$CHANNEL_ID" \
-            --data-urlencode "text=$POST_TEXT"
+          if "error" in data:
+              print("Gemini API Error:", data["error"])
+              sys.exit(1)
+
+          pearl = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+          print("Generated Pearl:\n", pearl)
+
+          bot_token = os.environ["BOT_TOKEN"]
+          channel = os.environ["CHANNEL_ID"]
+
+          tg = requests.post(
+              f"https://api.telegram.org/bot{bot_token}/sendMessage",
+              json={"chat_id": channel, "text": pearl}
+          )
+          print("Telegram Status:", tg.status_code)
+          print("Telegram Output:", tg.text)
+          if tg.status_code != 200:
+              sys.exit(1)
+          ' <<< "$RES"
