@@ -3,7 +3,7 @@ name: Auto Clinical Post to Telegram & LinkedIn
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 4 * * *' # रोज़ाना सुबह 9:30 AM IST
+    - cron: '0 4 * * *'
 
 jobs:
   post-clinical-pearl:
@@ -16,16 +16,27 @@ jobs:
           CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
           LINKEDIN_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
         run: |
-          # 1. Gemini 3.6 Flash से ICU Clinical Pearl जनरेट करना
-          PROMPT="Write a high-yield ICU Clinical Pearl for critical care nurses. Topic ideas: Arterial line dampening, Noradrenaline vs Vasopressin titration, ABG interpretation, or ventilator weaning pearls. Include bedside pearls with bullet points, emojis, and hashtags #ICUNursing #CriticalCare #Bexyhub. Keep it under 90 words."
+          # 1. Gemini API Call (स्थिर मॉडल और ऑटो-रीट्राई के साथ)
+          PROMPT="Write a high-yield ICU Clinical Pearl for critical care nurses. Topics: Arterial line dampening, Noradrenaline titration, ABG interpretation, or ventilator pearls. Include bedside rules, bullet points, emojis, and hashtags #ICUNursing #CriticalCare #Bexyhub. Keep it under 90 words."
 
           JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{contents: [{parts: [{text: $prompt}]}]}')
 
-          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=$GEMINI_API_KEY" \
+          echo "Generating content with gemini-2.5-flash..."
+          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$GEMINI_API_KEY" \
             -H "Content-Type: application/json" \
             -d "$JSON_PAYLOAD")
 
           POST_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
+
+          # यदि 503 ओवरलोड आए तो तुरंत दूसरे मॉडल पर फ़ॉलबैक
+          if [ -z "$POST_TEXT" ]; then
+            echo "Primary model busy, switching to gemini-2.5-pro..."
+            sleep 2
+            RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=$GEMINI_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d "$JSON_PAYLOAD")
+            POST_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
+          fi
 
           if [ -z "$POST_TEXT" ]; then
             echo "Gemini API Error: $RESPONSE"
