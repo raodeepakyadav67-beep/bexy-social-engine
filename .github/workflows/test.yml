@@ -1,4 +1,4 @@
-name: Auto Clinical Post to Telegram
+name: Auto Clinical Post to Telegram & LinkedIn
 
 on:
   workflow_dispatch:
@@ -9,12 +9,14 @@ jobs:
   post-clinical-pearl:
     runs-on: ubuntu-latest
     steps:
-      - name: Generate AI Content and Post
+      - name: Generate AI Content and Post to Both Platforms
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          LINKEDIN_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
         run: |
+          # 1. Gemini 3.6 Flash से ICU Clinical Pearl जनरेट करना
           PROMPT="Write a high-yield ICU Clinical Pearl for critical care nurses. Topic ideas: Arterial line dampening, Noradrenaline vs Vasopressin titration, ABG interpretation, or ventilator weaning pearls. Include bedside pearls with bullet points, emojis, and hashtags #ICUNursing #CriticalCare #Bexyhub. Keep it under 90 words."
 
           JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{contents: [{parts: [{text: $prompt}]}]}')
@@ -26,12 +28,58 @@ jobs:
           POST_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
 
           if [ -z "$POST_TEXT" ]; then
-            echo "Gemini API Response: $RESPONSE"
+            echo "Gemini API Error: $RESPONSE"
             exit 1
           fi
 
-          echo "AI Content generated successfully!"
+          echo "✅ AI Content generated successfully!"
 
-          curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
+          # 2. Telegram पर पोस्ट भेजना
+          echo "📤 Posting to Telegram..."
+          TG_RES=$(curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
             --data-urlencode "chat_id=$CHANNEL_ID" \
-            --data-urlencode "text=$POST_TEXT"
+            --data-urlencode "text=$POST_TEXT")
+          echo "Telegram Response: $TG_RES"
+
+          # 3. LinkedIn पर पोस्ट भेजना
+          if [ -n "$LINKEDIN_TOKEN" ]; then
+            echo "📤 Fetching LinkedIn Profile ID..."
+            USER_INFO=$(curl -s -X GET "https://api.linkedin.com/v2/userinfo" \
+              -H "Authorization: Bearer $LINKEDIN_TOKEN")
+            
+            PERSON_ID=$(echo "$USER_INFO" | jq -r '.sub // empty')
+            
+            if [ -n "$PERSON_ID" ]; then
+              echo "Found LinkedIn Person ID: $PERSON_ID"
+              AUTHOR_URN="urn:li:person:$PERSON_ID"
+
+              echo "📤 Posting to LinkedIn..."
+              LI_PAYLOAD=$(jq -n \
+                --arg author "$AUTHOR_URN" \
+                --arg text "$POST_TEXT" \
+                '{
+                  author: $author,
+                  lifecycleState: "PUBLISHED",
+                  specificContent: {
+                    "com.linkedin.ugc.ShareContent": {
+                      shareCommentary: { text: $text },
+                      shareMediaCategory: "NONE"
+                    }
+                  },
+                  visibility: {
+                    "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"
+                  }
+                }')
+
+              LI_RES=$(curl -s -X POST "https://api.linkedin.com/v2/ugcPosts" \
+                -H "Authorization: Bearer $LINKEDIN_TOKEN" \
+                -H "Content-Type: application/json" \
+                -H "X-Restli-Protocol-Version: 2.0.0" \
+                -d "$LI_PAYLOAD")
+
+              echo "LinkedIn Response: $LI_RES"
+              echo "✅ Successfully posted to LinkedIn!"
+            else
+              echo "⚠️ Could not fetch LinkedIn Person ID: $USER_INFO"
+            fi
+          fi
