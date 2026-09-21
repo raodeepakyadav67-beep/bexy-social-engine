@@ -30,10 +30,10 @@ jobs:
           JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{contents: [{parts: [{text: $prompt}]}]}')
 
           POST_TEXT=""
-             MODELS = ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash"]
+          MODELS=("gemini-3.6-flash" "gemini-3.5-flash-lite" "gemini-3.5-flash")
           for MODEL in "${MODELS[@]}"; do
             echo "Requesting content from $MODEL..."
-            RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=$GEMINI_API_KEY" \
+            RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}" \
               -H "Content-Type: application/json" \
               -d "$JSON_PAYLOAD")
 
