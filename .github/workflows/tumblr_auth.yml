@@ -1,16 +1,16 @@
-name: Get Tumblr Access Token
+name: Generate Final Tumblr Tokens
 
 on:
   workflow_dispatch:
 
 jobs:
-  auth:
+  get_final_tokens:
     runs-on: ubuntu-latest
     steps:
       - name: Install dependencies
         run: pip install requests_oauthlib
 
-      - name: Get OAuth Tokens
+      - name: Fetch Final Access Token
         env:
           CONSUMER_KEY: ${{ secrets.TUMBLR_CONSUMER_KEY }}
           CONSUMER_SECRET: ${{ secrets.TUMBLR_CONSUMER_SECRET }}
@@ -21,22 +21,25 @@ jobs:
 
           ck = os.environ['CONSUMER_KEY'].strip()
           cs = os.environ['CONSUMER_SECRET'].strip()
-
-          oauth = OAuth1Session(ck, client_secret=cs)
           
-          try:
-              fetch_response = oauth.fetch_request_token('https://www.tumblr.com/oauth/request_token')
-              resource_owner_key = fetch_response.get('oauth_token')
-              resource_owner_secret = fetch_response.get('oauth_token_secret')
-              
-              authorization_url = oauth.authorization_url('https://www.tumblr.com/oauth/authorize')
-              
-              print("=" * 60)
-              print("🔗 ऑथराइज़ेशन लिंक:")
-              print(authorization_url)
-              print("=" * 60)
-              print(f"OAUTH_TOKEN_SECRET={resource_owner_secret}")
-          except Exception as e:
-              print(f"Error: {e}")
-              raise e
+          # पहले स्टेप से मिले टोकन और सीक्रेट
+          resource_owner_key = "Zq2K88sC4UQiAcAC3IEdpBlPscgyzblI28zFM2Em4JBz5ddc5I"
+          resource_owner_secret = "HF8w5gdt1XjpMvW5UDCwGmVRWeTLmRG7vxEDUK26GlZXQ1YwJn"
+          verifier = "dt5ovvTV4UqAnWSUy2aqTHfO5fJuCVzfPScrNlk3DC6pRpqAhU"
+
+          oauth = OAuth1Session(
+              ck,
+              client_secret=cs,
+              resource_owner_key=resource_owner_key,
+              resource_owner_secret=resource_owner_secret,
+              verifier=verifier
+          )
+
+          tokens = oauth.fetch_access_token('https://www.tumblr.com/oauth/access_token')
+
+          print("=" * 60)
+          print("🎉 आपके फ़ाइनल Tumblr Tokens:")
+          print(f"TUMBLR_OAUTH_TOKEN={tokens.get('oauth_token')}")
+          print(f"TUMBLR_OAUTH_TOKEN_SECRET={tokens.get('oauth_token_secret')}")
+          print("=" * 60)
           EOF
