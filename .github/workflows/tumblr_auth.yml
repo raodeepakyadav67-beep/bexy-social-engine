@@ -1,4 +1,4 @@
-name: Post Clinical Update to Tumblr
+name: Publish Verified Post
 
 on:
   workflow_dispatch:
@@ -15,29 +15,24 @@ jobs:
       - name: Install pytumblr
         run: pip install pytumblr
 
-      - name: Publish Post
-        env:
-          CONSUMER_KEY: ${{ secrets.TUMBLR_CONSUMER_KEY }}
-          CONSUMER_SECRET: ${{ secrets.TUMBLR_CONSUMER_SECRET }}
-          OAUTH_TOKEN: ${{ secrets.TUMBLR_OAUTH_TOKEN }}
-          OAUTH_SECRET: ${{ secrets.TUMBLR_OAUTH_SECRET }}
+      - name: Create Post Direct
         run: |
           python - << 'EOF'
-          import os
           import pytumblr
 
+          # असली व सत्यापित क्रेडेंशियल्स
           client = pytumblr.TumblrRestClient(
-              os.environ['CONSUMER_KEY'],
-              os.environ['CONSUMER_SECRET'],
-              os.environ['OAUTH_TOKEN'],
-              os.environ['OAUTH_SECRET']
+              "k8zSXcYOmw1R0KV6lDmfeYLpPoZQ1mtrWKoLD5ZkKQLCqAutkp",
+              "3vhWHCiPtgyfpBmjT33jsKQjg2dKYONlkRPmHIOOOVEhvjRZzQ",
+              "gFoIAYkIyraYCFnx7x2chsckjoOAhI7vl2sCByXE61o0j4duWy",
+              "jbpn0q6aUKn5QJ8o6Undl9WQT3QhBBh2Q60qFrzlHE3LOhomkP"
           )
 
-          # bexyhub ब्लॉग पर ऑटोमैटिक पोस्ट
+          # bexyhub पर सीधा पोस्ट
           res = client.create_text(
               'bexyhub',
-              title='Clinical Post Engine Live',
-              body='Deepak Bexy automated posting pipeline via GitHub Actions is now active and verified.'
+              title='Clinical Automation Engine Live',
+              body='Deepak Bexy automated pipeline via GitHub Actions is officially verified and operational.'
           )
-          print("POST STATUS:", res)
+          print("DIRECT POST RESPONSE:", res)
           EOF
