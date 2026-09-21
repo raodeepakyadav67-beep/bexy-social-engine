@@ -3,14 +3,16 @@ name: Post Clinical Notes to Tumblr
 on:
   workflow_dispatch:
   schedule:
-  - cron: '0 11 * * *' # रोज़ सुबह 04:30 PM IST पर ऑटोमैटिक पोस्ट के लिए
+    - cron: '0 11 * * *' # रोज़ाना शाम 04:30 PM IST पर ऑटोमैटिक पोस्ट
 
 jobs:
   post:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-       - name: Set up Python
+        uses: actions/checkout@v4
+
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -34,7 +36,7 @@ jobs:
           import pytumblr
           import requests
 
-          # 1. Tumblr के लिए डीप केस स्टडी टॉपिक्स की लिस्ट
+          # Tumblr के लिए डीप केस स्टडी टॉपिक्स की लिस्ट
           TOPICS = [
               "Bedside Hemodynamic Instability: SVR vs PVR Nuances in Post-Op Cardiac Care",
               "Mechanical Ventilation: Driving Pressure Optimization in Severe ARDS",
@@ -94,7 +96,7 @@ jobs:
           """
           full_html = post_body + footer
 
-          # 2. Tumblr Client Setup & Posting
+          # Tumblr Client Setup & Posting
           client = pytumblr.TumblrRestClient(
               os.environ['CONSUMER_KEY'].strip(),
               os.environ['CONSUMER_SECRET'].strip(),
