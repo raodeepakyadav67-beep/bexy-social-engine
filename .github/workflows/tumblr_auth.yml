@@ -22,7 +22,7 @@ jobs:
           ck = os.environ['CONSUMER_KEY'].strip()
           cs = os.environ['CONSUMER_SECRET'].strip()
 
-          oauth = OAuth1Session(ck, client_secret=cs, callback_uri='https://bexyhub.in')
+          oauth = OAuth1Session(ck, client_secret=cs)
           
           try:
               fetch_response = oauth.fetch_request_token('https://www.tumblr.com/oauth/request_token')
