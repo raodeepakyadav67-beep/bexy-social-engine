@@ -4,17 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       action_type:
-        description: 'Type "start" to get link, or "finish" with verifier'
+        description: 'Type "start" or "finish"'
         required: true
         default: 'start'
       oauth_token:
-        description: 'Resource Owner Key (from start step)'
+        description: 'Resource Owner Key'
         required: false
       oauth_secret:
-        description: 'Resource Owner Secret (from start step)'
+        description: 'Resource Owner Secret'
         required: false
       verifier:
-        description: 'Verifier code from URL'
+        description: 'Verifier code'
         required: false
 
 jobs:
@@ -39,7 +39,7 @@ jobs:
 
           ck = os.environ['CONSUMER_KEY'].strip()
           cs = os.environ['CONSUMER_SECRET'].strip()
-          action = os.environ['ACTION_TYPE'].strip()
+          action = os.environ['ACTION_TYPE'].strip().lower()
 
           if action == 'start':
               oauth = OAuth1Session(ck, client_secret=cs)
@@ -55,7 +55,7 @@ jobs:
           elif action == 'finish':
               req_key = os.environ['REQ_KEY'].strip()
               req_sec = os.environ['REQ_SECRET'].strip()
-              verifier = os.environ['VERIFIER'].strip()
+              verifier = os.environ['VERIFIER'].strip().replace('#_=_', '')
               
               oauth = OAuth1Session(
                   ck,
