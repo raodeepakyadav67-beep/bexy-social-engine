@@ -1,0 +1,99 @@
+name: Daily Blogger Clinical Guide (Bilingual)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 6 * * *' # रोज़ दोपहर 12:00 PM IST (06:30 AM UTC)
+
+jobs:
+  publish_blogger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          pip install google-genai
+
+      - name: Generate Clinical Article & Send to Blogger
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+          SENDER_APP_PASSWORD: ${{ secrets.SENDER_APP_PASSWORD }}
+          BLOGGER_POST_EMAIL: ${{ secrets.BLOGGER_POST_EMAIL }}
+        run: |
+          python - << 'EOF'
+          import os
+          import json
+          import smtplib
+          from email.mime.multipart import MIMEMultipart
+          from email.mime.text import MIMEText
+          from google import genai
+          from google.genai import types
+
+          # 1. Gemini AI Client Setup
+          gemini_client = genai.Client(api_key=os.environ['GEMINI_API_KEY'].strip())
+
+          prompt = """
+          You are Deepak Kumar, an MSc Nursing Officer and Intensive Care Specialist with years of clinical experience across CTVS, MICU, Emergency, and Neuro ICU.
+          Write an exhaustive, high-yield bilingual clinical study guide / article (1200 to 1800 words) for bedside nursing officers and ICU teams.
+          Bridge the gap between textbook theory and intense bedside ICU practice. Avoid basic textbook definitions or generic AI summaries.
+
+          Structure and Language Tone:
+          - Core physiological definitions, criteria, and hemodynamic equations in authoritative English.
+          - 'Bedside Practical Pearls / Ground Reality' in natural Hindi/Hinglish explaining what monitors actually show and how to respond safely.
+
+          HTML Formatting Structure (use <h2>, <h3>, <p>, <ul>, <li>, <strong>):
+          - <h2>Clinical Presentation & Hemodynamic Assessment</h2>
+          - <h2>Pathophysiologic Nuances & Red Flags</h2>
+          - <h2>Bedside Clinical Rationale: What the Books Don't Tell You (Bilingual Breakdown)</h2>
+          - <h2>Step-by-Step Nursing Interventions & Drug Titration Pearls</h2>
+          - <h2>Critical Pitfalls to Prevent at the Bedside</h2>
+          - <p><em>Published via Bexyhub Clinical Engine | Nursing Excellence Hub</em></p>
+
+          Output STRICTLY valid JSON with two fields:
+          {
+            "subject": "Compelling clinical title starting with 'Clinical Guide:'",
+            "body": "Full HTML formatted article"
+          }
+          """
+
+          response = gemini_client.models.generate_content(
+              model='gemini-2.5-flash',
+              contents=prompt,
+              config=types.GenerateContentConfig(
+                  response_mime_type="application/json"
+              )
+          )
+
+          data = json.loads(response.text)
+          subject = data.get("subject")
+          body = data.get("body")
+          print(f"Generated Clinical Topic: {subject}")
+
+          # 2. Setup Email
+          sender = os.environ['SENDER_EMAIL'].strip()
+          password = os.environ['SENDER_APP_PASSWORD'].strip().replace(" ", "")
+          recipient = os.environ['BLOGGER_POST_EMAIL'].strip()
+
+          msg = MIMEMultipart('alternative')
+          msg['From'] = sender
+          msg['To'] = recipient
+          msg['Subject'] = subject
+
+          html_part = MIMEText(body, 'html')
+          msg.attach(html_part)
+
+          # 3. Send Email to Blogger via Gmail SMTP
+          with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+              server.login(sender, password)
+              server.sendmail(sender, recipient, msg.as_string())
+
+          print("Successfully posted article to Blogger via Secret Email!")
+          EOF
