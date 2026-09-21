@@ -1,10 +1,10 @@
-name: Generate Final Permanent Tokens
+name: Test Post to Bexyhub Tumblr
 
 on:
   workflow_dispatch:
 
 jobs:
-  auth:
+  post:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Python
@@ -12,30 +12,32 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
-        run: pip install requests_oauthlib
+      - name: Install pytumblr
+        run: pip install pytumblr
 
-      - name: Get Final Keys
+      - name: Create Test Post
+        env:
+          CONSUMER_KEY: ${{ secrets.TUMBLR_CONSUMER_KEY }}
+          CONSUMER_SECRET: ${{ secrets.TUMBLR_CONSUMER_SECRET }}
+          OAUTH_TOKEN: ${{ secrets.TUMBLR_OAUTH_TOKEN }}
+          OAUTH_SECRET: ${{ secrets.TUMBLR_OAUTH_SECRET }}
         run: |
           python - << 'EOF'
-          from requests_oauthlib import OAuth1Session
+          import os
+          import pytumblr
 
-          CONSUMER_KEY = "k8zSXcYOmw1R0KV6lDmfeYLpPoZQ1mtrWKoLD5ZkKQLCqAutkp"
-          CONSUMER_SECRET = "3vhWHCiPtgyfpBmjT33jsKQjg2dKYONlkRPmHIOOOVEhvjRZzQ"
-          TEMP_SECRET = "Uglyi9cYa7volsIgdIE3vRFtMV92DGA6ukmQ7rRQW4pwNoLuBf"
-
-          oauth = OAuth1Session(
-              CONSUMER_KEY,
-              client_secret=CONSUMER_SECRET,
-              resource_owner_key="1QhowWf1eIwcrLS9ORoUI7YlIhKA1yKCCkzX3YFmYP177iEHat",
-              resource_owner_secret=TEMP_SECRET,
-              verifier="bs2KhV3rVPuuTVLKNQxxN90JSGMBEuE6pEcNadmlV8nr3ytZMU"
+          client = pytumblr.TumblrRestClient(
+              os.environ['CONSUMER_KEY'],
+              os.environ['CONSUMER_SECRET'],
+              os.environ['OAUTH_TOKEN'],
+              os.environ['OAUTH_SECRET']
           )
-          tokens = oauth.fetch_access_token("https://www.tumblr.com/oauth/access_token")
 
-          print("\n" + "="*50)
-          print("YOUR PERMANENT TUMBLR KEYS:")
-          print("TUMBLR_OAUTH_TOKEN:", tokens.get('oauth_token'))
-          print("TUMBLR_OAUTH_SECRET:", tokens.get('oauth_token_secret'))
-          print("="*50 + "\n")
+          # Bexyhub ब्लॉग पर टेस्ट पोस्ट
+          response = client.create_text(
+              'bexyhub',
+              title='Clinical Automation Engine Online',
+              body='Deepak Bexy clinical auto-post engine is successfully connected and verified via GitHub Actions.'
+          )
+          print("Response:", response)
           EOF
