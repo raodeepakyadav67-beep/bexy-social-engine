@@ -3,7 +3,7 @@ name: Auto Clinical Post to Telegram & LinkedIn
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 6 * * *' # रोज़ाना सुबह 10:40 AM IST
+    - cron: '0 1 * * *' # रोज़ाना सुबह 06:30 AM IST
 
 jobs:
   post-clinical-pearl:
