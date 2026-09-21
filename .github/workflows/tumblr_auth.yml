@@ -1,4 +1,4 @@
-name: Publish Verified Post
+name: Publish via Tumblr OAuth2
 
 on:
   workflow_dispatch:
@@ -12,27 +12,53 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install pytumblr
-        run: pip install pytumblr
+      - name: Install requests
+        run: pip install requests
 
-      - name: Create Post Direct
+      - name: Exchange Token and Publish Post
         run: |
           python - << 'EOF'
-          import pytumblr
+          import requests
 
-          # असली व सत्यापित क्रेडेंशियल्स
-          client = pytumblr.TumblrRestClient(
-              "k8zSXcYOmw1R0KV6lDmfeYLpPoZQ1mtrWKoLD5ZkKQLCqAutkp",
-              "3vhWHCiPtgyfpBmjT33jsKQjg2dKYONlkRPmHIOOOVEhvjRZzQ",
-              "gFoIAYkIyraYCFnx7x2chsckjoOAhI7vl2sCByXE61o0j4duWy",
-              "jbpn0q6aUKn5QJ8o6Undl9WQT3QhBBh2Q60qFrzlHE3LOhomkP"
-          )
+          CLIENT_ID = "k8zSXcYOmw1R0KV6lDmfeYLpPoZQ1mtrWKoLD5ZkKQLCqAutkp"
+          CLIENT_SECRET = "3vhWHCiPtgyfpBmjT33jsKQjg2dKYONlkRPmHIOOOVEhvjRZzQ"
+          AUTH_CODE = "bf37f3ac22ccca5f5fd82a37f907f432f5e1609c"
+          REDIRECT_URI = "http://localhost:8080/callback"
 
-          # bexyhub पर सीधा पोस्ट
-          res = client.create_text(
-              'bexyhub',
-              title='Clinical Automation Engine Live',
-              body='Deepak Bexy automated pipeline via GitHub Actions is officially verified and operational.'
-          )
-          print("DIRECT POST RESPONSE:", res)
+          # 1. Bearer Token प्राप्त करें
+          token_url = "https://api.tumblr.com/v2/oauth2/token"
+          data = {
+              "grant_type": "authorization_code",
+              "code": AUTH_CODE,
+              "client_id": CLIENT_ID,
+              "client_secret": CLIENT_SECRET,
+              "redirect_uri": REDIRECT_URI
+          }
+
+          res = requests.post(token_url, data=data)
+          token_data = res.json()
+          print("TOKEN EXCHANGE RESPONSE:", token_data)
+
+          access_token = token_data.get("access_token")
+
+          if access_token:
+              print("\nSUCCESS! BEARER TOKEN GENERATED.")
+              # 2. Bexyhub पर सीधा पोस्ट भेजें
+              headers = {
+                  "Authorization": f"Bearer {access_token}",
+                  "Content-Type": "application/json"
+              }
+              post_url = "https://api.tumblr.com/v2/blog/bexyhub/post"
+              payload = {
+                  "content": [
+                      {
+                          "type": "text",
+                          "text": "Clinical Automation Engine Verified & Live!\n\nDeepak Bexy pipeline connected successfully via OAuth 2.0."
+                      }
+                  ]
+              }
+              post_res = requests.post(post_url, headers=headers, json=payload)
+              print("\nPOST CREATION RESPONSE:", post_res.json())
+          else:
+              print("Failed to obtain access token:", token_data)
           EOF
