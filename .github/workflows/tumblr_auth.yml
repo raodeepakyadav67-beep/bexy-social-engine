@@ -21,7 +21,7 @@ jobs:
         run: |
           pip install pytumblr requests
 
-      - name: Post Clinical Notes to Tumblr
+      - name: Generate Content and Post to Tumblr
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           CONSUMER_KEY: ${{ secrets.TUMBLR_CONSUMER_KEY }}
@@ -36,7 +36,7 @@ jobs:
           import pytumblr
           import requests
 
-          # 1. Tumblr के लिए क्लिनिकल टॉपिक्स की लिस्ट
+          # 1. रोज़ाना अलग और डीप क्लिनिकल केस स्टडी टॉपिक्स
           TOPICS = [
               "Bedside Hemodynamic Instability: SVR vs PVR Nuances in Post-Op Cardiac Care",
               "Mechanical Ventilation: Driving Pressure Optimization in Severe ARDS",
@@ -44,7 +44,7 @@ jobs:
               "Inotrope Selection: Dobutamine vs Milrinone in Cardiogenic Shock",
               "CRRT Bedside Troubleshooting: Filter Clotting and Transmembrane Pressure Spikes",
               "Severe Metabolic Acidosis: When Bicarbonate Helps and When It Kills",
-              "Neuro ICU: Targeted Temperature Management & Secondary Brain Injury Prevention"
+              "Neuro ICU: Targeted Temperature Management and Secondary Brain Injury Prevention"
           ]
           selected_topic = random.choice(TOPICS)
 
@@ -58,7 +58,7 @@ jobs:
           - Hemodynamic Rationale & Pathophysiology
           - 3 Golden Rules for Bedside Nurses
           
-          Format using clean HTML (<h3>, <p>, <ul>, <li>, <strong>). No markdown.
+          Format using clean HTML (<h3>, <p>, <ul>, <li>, <strong>). Do not use markdown backticks.
           Output strictly a valid JSON object:
           {{
             "title": "Clinical Title Here",
@@ -88,6 +88,7 @@ jobs:
           post_title = data.get("title", selected_topic)
           post_body = data.get("body", "")
 
+          # Footer Attribution
           footer = """
           <hr/>
           <p><strong>Published by Deepak Kumar | MSc Nursing Officer & ICU Specialist</strong><br/>
@@ -103,18 +104,12 @@ jobs:
               os.environ['OAUTH_SECRET'].strip()
           )
 
-          user_info = client.info()
-          print(f"Tumblr response: {user_info}")
+          # यहाँ आपके Tumblr ब्लॉग का नाम/हैंडल
+          BLOG_IDENTIFIER = "bexyhub"
 
-          # ब्लॉग का नाम सुरक्षित तरीके से निकालना
-          if 'user' in user_info and 'blogs' in user_info['user'] and len(user_info['user']['blogs']) > 0:
-              blog_name = user_info['user']['blogs'][0]['name']
-          else:
-              raise RuntimeError(f"Tumblr Auth / Blog Name Error. Response received: {user_info}")
-
-          print(f"Posting to Tumblr blog: {blog_name}...")
+          print(f"Posting directly to Tumblr blog: {BLOG_IDENTIFIER}...")
           response = client.create_text(
-              blog_name,
+              BLOG_IDENTIFIER,
               state="published",
               format="html",
               title=post_title,
@@ -122,5 +117,9 @@ jobs:
               tags=["ICUNursing", "CriticalCare", "BedsideNursing", "ClinicalPearls", "Bexyhub"]
           )
 
-          print(f"Successfully posted to Tumblr! Post ID: {response.get('id', 'Done')}")
+          print("Tumblr Response:", response)
+          if 'id' in response:
+              print(f"✅ Successfully posted to Tumblr! Post ID: {response['id']}")
+          else:
+              raise RuntimeError(f"Tumblr Posting Error: {response}")
           EOF
