@@ -1,4 +1,4 @@
-name: Generate Tumblr Keys Direct
+name: Generate Final Permanent Tokens
 
 on:
   workflow_dispatch:
@@ -15,25 +15,27 @@ jobs:
       - name: Install dependencies
         run: pip install requests_oauthlib
 
-      - name: Obtain Real Tokens
+      - name: Get Final Keys
         run: |
           python - << 'EOF'
           from requests_oauthlib import OAuth1Session
 
           CONSUMER_KEY = "k8zSXcYOmw1R0KV6lDmfeYLpPoZQ1mtrWKoLD5ZkKQLCqAutkp"
           CONSUMER_SECRET = "3vhWHCiPtgyfpBmjT33jsKQjg2dKYONlkRPmHIOOOVEhvjRZzQ"
+          TEMP_SECRET = "Uglyi9cYa7volsIgdIE3vRFtMV92DGA6ukmQ7rRQW4pwNoLuBf"
 
-          oauth = OAuth1Session(CONSUMER_KEY, client_secret=CONSUMER_SECRET)
-          try:
-              fetch_response = oauth.fetch_request_token("https://www.tumblr.com/oauth/request_token")
-              owner_secret = fetch_response.get('oauth_token_secret')
+          oauth = OAuth1Session(
+              CONSUMER_KEY,
+              client_secret=CONSUMER_SECRET,
+              resource_owner_key="1QhowWf1eIwcrLS9ORoUI7YlIhKA1yKCCkzX3YFmYP177iEHat",
+              resource_owner_secret=TEMP_SECRET,
+              verifier="bs2KhV3rVPuuTVLKNQxxN90JSGMBEuE6pEcNadmlV8nr3ytZMU"
+          )
+          tokens = oauth.fetch_access_token("https://www.tumblr.com/oauth/access_token")
 
-              auth_url = oauth.authorization_url("https://www.tumblr.com/oauth/authorize")
-              print("\n" + "="*60)
-              print("IS URL KO BROWSER ME KHOL KAR ALLOW DABAYEIN:")
-              print(auth_url)
-              print("="*60 + "\n")
-              print("TEMP_SECRET:", owner_secret)
-          except Exception as e:
-              print("ERROR DETAILS:", e)
+          print("\n" + "="*50)
+          print("YOUR PERMANENT TUMBLR KEYS:")
+          print("TUMBLR_OAUTH_TOKEN:", tokens.get('oauth_token'))
+          print("TUMBLR_OAUTH_SECRET:", tokens.get('oauth_token_secret'))
+          print("="*50 + "\n")
           EOF
