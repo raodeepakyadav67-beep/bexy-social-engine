@@ -12,23 +12,20 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install pytumblr
-        run: pip install pytumblr requests_oauthlib
+      - name: Install dependencies
+        run: pip install requests_oauthlib
 
       - name: Obtain Real Tokens
         run: |
           python - << 'EOF'
-          import urllib.parse
           from requests_oauthlib import OAuth1Session
 
-          # Bexyhub Auto की कुंजियाँ
-          CONSUMER_KEY = "kBzSXcYOmw1ROKV6lDmfeYLPPoZQimtrWKoLD5ZkKQLCqAutkp"
-          CONSUMER_SECRET = "3vhWHCIPtgyfpBmjT33jskQjg2dKYONlkRPMHIOOOVEhvJRZzQ"
+          CONSUMER_KEY = "k8zSXcYOmw1R0KV6lDmfeYLpPoZQ1mtrWKoLD5ZkKQLCqAutkp"
+          CONSUMER_SECRET = "3vhWHCiPtgyfpBmjT33jsKQjg2dKYONlkRPmHIOOOVEhvjRZzQ"
 
           oauth = OAuth1Session(CONSUMER_KEY, client_secret=CONSUMER_SECRET)
           try:
               fetch_response = oauth.fetch_request_token("https://www.tumblr.com/oauth/request_token")
-              owner_key = fetch_response.get('oauth_token')
               owner_secret = fetch_response.get('oauth_token_secret')
 
               auth_url = oauth.authorization_url("https://www.tumblr.com/oauth/authorize")
