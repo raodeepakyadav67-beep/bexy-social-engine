@@ -16,17 +16,19 @@ jobs:
         run: pip install requests
 
       - name: Create Tumblr Post
+        env:
+          TUMBLR_ACCESS_TOKEN: ${{ secrets.TUMBLR_ACCESS_TOKEN }}
         run: |
           python - << 'EOF'
+          import os
           import requests
 
-          access_token = "aUCQ6BqiOrfODgDU6XE3n1opRn38CqFLcNsTFUCbAbgTRpVy0q"
+          access_token = os.environ['TUMBLR_ACCESS_TOKEN']
 
           headers = {
               "Authorization": f"Bearer {access_token}"
           }
 
-          # Standard Legacy Post Endpoint (Most Reliable)
           post_url = "https://api.tumblr.com/v2/blog/bexyhub/post"
 
           data = {
