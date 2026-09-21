@@ -41,7 +41,7 @@ jobs:
           gemini_client = genai.Client(api_key=os.environ['GEMINI_API_KEY'].strip())
 
           prompt = """
-          You are Deepak Kumar, an MSc Nursing Officer and Intensive Care Specialist with years of clinical experience across CTVS, MICU, Emergency, and Neuro ICU.
+          You are Deepak Kumar, an MSc Nursing Officer and Intensive Care Specialist with real clinical experience across CTVS, MICU, Emergency, and Neuro ICU.
           Write an exhaustive, high-yield bilingual clinical study guide / article (1200 to 1800 words) for bedside nursing officers and ICU teams.
           Bridge the gap between textbook theory and intense bedside ICU practice. Avoid basic textbook definitions or generic AI summaries.
 
@@ -64,8 +64,9 @@ jobs:
           }
           """
 
+          # Calling stable gemini-2.0-flash
           response = gemini_client.models.generate_content(
-              model='gemini-2.5-flash',
+              model='gemini-2.0-flash',
               contents=prompt,
               config=types.GenerateContentConfig(
                   response_mime_type="application/json"
