@@ -16,18 +16,38 @@ jobs:
           CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
           LINKEDIN_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
         run: |
-          # 1. बिना किसी स्टार या बुलेट के नेचुरल क्लिनिकल प्रॉम्प्ट
-          PROMPT="Act as an experienced Critical Care Nursing Specialist. Write a high-yield, realistic ICU clinical note for bedside nurses. 
+         # 1. रैंडम टॉपिक चुनना ताकि हर बार अलग पोस्ट बने
+          TOPICS=(
+            "Arterial Line Damping and Flush Test Pitfalls in ICU"
+            "Noradrenaline vs Vasopressin Titration in Refractory Septic Shock"
+            "Post-CABG Sudden Mediastinal Drain Cessation and Cardiac Tamponade"
+            "Recognizing Patient-Ventilator Asynchrony: Double Triggering & Flow Starvation"
+            "Neuro ICU: Cerebral Perfusion Pressure (CPP) vs ICP Spike Management"
+            "Electrolyte Emergencies: Rapid Potassium Correction and Cardiac Arrhythmias"
+            "Post-PCI Radial Artery Hematoma and Bedside Compartment Syndrome Watch"
+            "Targeted Temperature Management (TTM) Post-Cardiac Arrest Pearls"
+            "High PEEP Hazards: Right Ventricular Strain and Hemodynamic Collapse"
+            "Bedside CVP Interpretation: Volume Responsiveness vs Fluid Overload"
+          )
+          RANDOM_TOPIC=${TOPICS[$RANDOM % ${#TOPICS[@]}]}
 
-          Follow this plain text format strictly without markdown formatting:
-          Line 1: Bexyhub Education
-          Line 2: [Concise Clinical Title, e.g., Arterial Line Overdamping in Shock]
-          Line 3: (Leave empty line)
-          Line 4: A single, natural, authoritative clinical paragraph of 5 to 6 sentences explaining real-world ICU bedside reality, rationale, and nursing action. Strictly DO NOT use any asterisks (*), do not use bullet points, do not use quotation marks, and avoid generic robotic phrasing.
-          Line 5: (Leave empty line)
-          Line 6: Official Portal: https://bexyhub.in"
+          PROMPT="Act as Deepak Kumar, an MSc Nursing Officer and Intensive Care Specialist (CTVS, MICU, Neuro ICU).
+            Write an ultra-realistic, practical bedside clinical pearl on: '$RANDOM_TOPIC'.
+            Focus strictly on practical monitor reality, what the monitors show, exact bedside drug titration, and what textbooks miss.
+            Keep it punchy, authoritative, and direct for Telegram and LinkedIn.
+           Do not use generic definitions or AI fluff.
+           Finish with a short 2-line practical bedside takeaway."
 
-          JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{contents: [{parts: [{text: $prompt}]}]}')
+          # 2. Temperature 1.0 सेट किया गया ताकि कभी भी रिपीट न हो
+          JSON_PAYLOAD=$(jq -n \
+            --arg prompt "$PROMPT" \
+            '{
+              contents: [{parts: [{text: $prompt}]}],
+              generationConfig: {
+                temperature: 1.0,
+                topP: 0.95
+              }
+            }')
 
           POST_TEXT=""
           MODELS=("gemini-3.6-flash" "gemini-3.5-flash-lite" "gemini-3.5-flash")
