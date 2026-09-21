@@ -7,15 +7,15 @@ jobs:
   get-board-id:
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch Pinterest Boards
+      - name: Fetch Pinterest Boards (Sandbox & Trial Check)
         env:
           PINTEREST_TOKEN: ${{ secrets.PINTEREST_ACCESS_TOKEN }}
         run: |
-          echo "🔍 Fetching User Info..."
-          curl -s -X GET "https://api.pinterest.com/v5/user_account" \
+          echo "🔍 Testing Sandbox Endpoint..."
+          curl -s -X GET "https://api-sandbox.pinterest.com/v5/user_account" \
             -H "Authorization: Bearer $PINTEREST_TOKEN"
           echo -e "\n----------------------------------------\n"
           
-          echo "🔍 Fetching Boards..."
-          curl -s -X GET "https://api.pinterest.com/v5/boards?page_size=20" \
+          echo "🔍 Testing Sandbox Boards..."
+          curl -s -X GET "https://api-sandbox.pinterest.com/v5/boards" \
             -H "Authorization: Bearer $PINTEREST_TOKEN"
