@@ -94,7 +94,7 @@ jobs:
               os.environ['OAUTH_SECRET'].strip()
           )
 
-          BLOG_IDENTIFIER = "bexyhub"
+          BLOG_IDENTIFIER = "bexyhub.tumblr.com"
 
           print(f"Posting directly to Tumblr blog: {BLOG_IDENTIFIER}...")
           response = client.create_text(
