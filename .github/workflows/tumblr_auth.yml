@@ -3,7 +3,7 @@ name: Post Clinical Notes to Tumblr
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 11 * * *' # रोज़ाना शाम 04:30 PM IST पर ऑटोमैटिक पोस्ट
+    - cron: '0 11 * * *' # रोज़ाना शाम 04:30 PM IST
 
 jobs:
   post:
@@ -31,12 +31,10 @@ jobs:
         run: |
           python - << 'EOF'
           import os
-          import json
           import random
           import pytumblr
           import requests
 
-          # 1. रोज़ाना अलग और डीप क्लिनिकल केस स्टडी टॉपिक्स
           TOPICS = [
               "Bedside Hemodynamic Instability: SVR vs PVR Nuances in Post-Op Cardiac Care",
               "Mechanical Ventilation: Driving Pressure Optimization in Severe ARDS",
@@ -50,20 +48,13 @@ jobs:
 
           prompt = f"""
           Act as Deepak Kumar, an MSc Nursing Officer and Intensive Care Specialist.
-          Write an in-depth, deeply practical bedside clinical case study on: '{selected_topic}'.
-          Target: Bedside ICU Nurses, Critical Care Fellows.
-          Structure:
-          - Title (Catchy & Clinical)
-          - Case Scenario & Monitor Findings
-          - Hemodynamic Rationale & Pathophysiology
-          - 3 Golden Rules for Bedside Nurses
-          
-          Format using clean HTML (<h3>, <p>, <ul>, <li>, <strong>). Do not use markdown backticks.
-          Output strictly a valid JSON object:
-          {{
-            "title": "Clinical Title Here",
-            "body": "HTML formatted body content"
-          }}
+          Write an in-depth bedside clinical case study on: '{selected_topic}'.
+          Target: Bedside ICU Nurses and Critical Care Fellows.
+
+          Follow this format strictly:
+          Line 1: Concise Clinical Title
+          Line 2 onwards: Clean HTML body with <h3> headings, <p> paragraphs, <ul> and <li> bullet points, and <strong> for key drugs/values.
+          Do not include JSON formatting or markdown backticks.
           """
 
           api_key = os.environ['GEMINI_API_KEY'].strip()
@@ -72,7 +63,6 @@ jobs:
           payload = {
               "contents": [{"parts": [{"text": prompt}]}],
               "generationConfig": {
-                  "response_mime_type": "application/json",
                   "temperature": 1.0,
                   "topP": 0.95
               }
@@ -84,11 +74,12 @@ jobs:
           if res.status_code != 200:
               raise RuntimeError(f"Gemini API failed with status {res.status_code}: {res.text}")
 
-          data = json.loads(res.json()['candidates'][0]['content']['parts'][0]['text'])
-          post_title = data.get("title", selected_topic)
-          post_body = data.get("body", "")
+          raw_text = res.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+          lines = raw_text.splitlines()
 
-          # Footer Attribution
+          post_title = lines[0].replace("#", "").strip() if len(lines) > 0 else selected_topic
+          post_body = "\n".join(lines[1:]).strip()
+
           footer = """
           <hr/>
           <p><strong>Published by Deepak Kumar | MSc Nursing Officer & ICU Specialist</strong><br/>
@@ -96,7 +87,6 @@ jobs:
           """
           full_html = post_body + footer
 
-          # 2. Tumblr Client Setup
           client = pytumblr.TumblrRestClient(
               os.environ['CONSUMER_KEY'].strip(),
               os.environ['CONSUMER_SECRET'].strip(),
@@ -104,8 +94,7 @@ jobs:
               os.environ['OAUTH_SECRET'].strip()
           )
 
-          # यहाँ आपके Tumblr ब्लॉग का नाम/हैंडल
-          BLOG_IDENTIFIER = "bexyhub.tumblr.com"
+          BLOG_IDENTIFIER = "bexyhub"
 
           print(f"Posting directly to Tumblr blog: {BLOG_IDENTIFIER}...")
           response = client.create_text(
