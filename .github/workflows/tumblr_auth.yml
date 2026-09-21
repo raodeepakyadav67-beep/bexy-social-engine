@@ -2,8 +2,8 @@ name: Post Clinical Notes to Tumblr
 
 on:
   workflow_dispatch:
-  # schedule:
-  #   - cron: '0 6 * * *' # रोज़ सुबह 11:30 AM IST पर ऑटोमैटिक पोस्ट के लिए
+  schedule:
+  - cron: '0 11 * * *' # रोज़ सुबह 04:30 PM IST पर ऑटोमैटिक पोस्ट के लिए
 
 jobs:
   post:
