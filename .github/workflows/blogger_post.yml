@@ -37,6 +37,7 @@ jobs:
           from google import genai
           from google.genai import types
 
+          # 1. Gemini Client Setup
           gemini_client = genai.Client(api_key=os.environ['GEMINI_API_KEY'].strip())
 
           prompt = """
@@ -63,33 +64,21 @@ jobs:
           }
           """
 
-          candidate_models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
-          response = None
-
-          for model_name in candidate_models:
-              try:
-                  print(f"Trying generation with model: {model_name}...")
-                  response = gemini_client.models.generate_content(
-                      model=model_name,
-                      contents=prompt,
-                      config=types.GenerateContentConfig(
-                          response_mime_type="application/json"
-                      )
-                  )
-                  if response and response.text:
-                      print(f"Success with {model_name}!")
-                      break
-              except Exception as err:
-                  print(f"Failed with {model_name}: {err}")
-
-          if not response:
-              raise RuntimeError("All candidate models failed to respond.")
+          print("Generating article using gemini-3.6-flash...")
+          response = gemini_client.models.generate_content(
+              model='gemini-3.6-flash',
+              contents=prompt,
+              config=types.GenerateContentConfig(
+                  response_mime_type="application/json"
+              )
+          )
 
           data = json.loads(response.text)
           subject = data.get("subject")
           body = data.get("body")
           print(f"Generated Clinical Topic: {subject}")
 
+          # 2. Email Setup
           sender = os.environ['SENDER_EMAIL'].strip()
           password = os.environ['SENDER_APP_PASSWORD'].strip().replace(" ", "")
           recipient = os.environ['BLOGGER_POST_EMAIL'].strip()
@@ -102,6 +91,7 @@ jobs:
           html_part = MIMEText(body, 'html')
           msg.attach(html_part)
 
+          # 3. Send Email to Blogger
           with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
               server.login(sender, password)
               server.sendmail(sender, recipient, msg.as_string())
