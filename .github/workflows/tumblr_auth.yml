@@ -36,7 +36,7 @@ jobs:
           import pytumblr
           import requests
 
-          # Tumblr के लिए डीप केस स्टडी टॉपिक्स की लिस्ट
+          # 1. Tumblr के लिए क्लिनिकल टॉपिक्स की लिस्ट
           TOPICS = [
               "Bedside Hemodynamic Instability: SVR vs PVR Nuances in Post-Op Cardiac Care",
               "Mechanical Ventilation: Driving Pressure Optimization in Severe ARDS",
@@ -88,7 +88,6 @@ jobs:
           post_title = data.get("title", selected_topic)
           post_body = data.get("body", "")
 
-          # Footer Attribution
           footer = """
           <hr/>
           <p><strong>Published by Deepak Kumar | MSc Nursing Officer & ICU Specialist</strong><br/>
@@ -96,7 +95,7 @@ jobs:
           """
           full_html = post_body + footer
 
-          # Tumblr Client Setup & Posting
+          # 2. Tumblr Client Setup
           client = pytumblr.TumblrRestClient(
               os.environ['CONSUMER_KEY'].strip(),
               os.environ['CONSUMER_SECRET'].strip(),
@@ -105,7 +104,13 @@ jobs:
           )
 
           user_info = client.info()
-          blog_name = user_info['user']['blogs'][0]['name']
+          print(f"Tumblr response: {user_info}")
+
+          # ब्लॉग का नाम सुरक्षित तरीके से निकालना
+          if 'user' in user_info and 'blogs' in user_info['user'] and len(user_info['user']['blogs']) > 0:
+              blog_name = user_info['user']['blogs'][0]['name']
+          else:
+              raise RuntimeError(f"Tumblr Auth / Blog Name Error. Response received: {user_info}")
 
           print(f"Posting to Tumblr blog: {blog_name}...")
           response = client.create_text(
