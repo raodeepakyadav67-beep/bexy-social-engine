@@ -19,7 +19,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install google-genai
+          pip install requests
 
       - name: Generate Clinical Article & Send to Blogger
         env:
@@ -33,18 +33,16 @@ jobs:
           import json
           import time
           import smtplib
+          import requests
           from email.mime.multipart import MIMEMultipart
           from email.mime.text import MIMEText
-          from google import genai
-          from google.genai import types
 
-          # 1. Gemini Client Setup
-          gemini_client = genai.Client(api_key=os.environ['GEMINI_API_KEY'].strip())
+          api_key = os.environ['GEMINI_API_KEY'].strip()
 
           prompt = """
-          You are Deepak Kumar, an MSc Nursing Officer and Intensive Care Specialist with real clinical experience across CTVS, MICU, Emergency, and Neuro ICU.
-          Write an exhaustive, high-yield, deeply practical clinical study guide / article (1200 to 1800 words) for bedside nursing officers and ICU teams.
-          Bridge the gap between textbook theory and real bedside clinical practice. Avoid generic AI summaries.
+          You are Deepak Kumar, an MSc Nursing Officer and Intensive Care Specialist with intense bedside clinical experience across CTVS, MICU, Emergency, and Neuro ICU.
+          Write an exhaustive, high-yield, deeply practical clinical study guide / article (1200 to 1800 words) for nursing officers, ICU specialists, and medical students.
+          Bridge the gap between textbook theory and real bedside clinical practice. Avoid generic AI summaries or basic definitions.
 
           STRICT STRUCTURAL AND PARAGRAPH-BY-PARAGRAPH RULES:
           Every single section must strictly alternate paragraph-by-paragraph:
@@ -80,34 +78,45 @@ jobs:
           }
           """
 
-          # Robust retry mechanism for 503 Overload handling
-          response = None
-          for attempt in range(1, 4):
-              try:
-                  print(f"Generating article using gemini-3.6-flash (Attempt {attempt}/3)...")
-                  response = gemini_client.models.generate_content(
-                      model='gemini-3.6-flash',
-                      contents=prompt,
-                      config=types.GenerateContentConfig(
-                          response_mime_type="application/json"
-                      )
-                  )
-                  if response and response.text:
-                      print("Generation successful!")
-                      break
-              except Exception as e:
-                  print(f"Server busy or error on attempt {attempt}: {e}")
-                  if attempt < 3:
-                      print("Waiting 10 seconds before retrying...")
-                      time.sleep(10)
-                  else:
-                      raise e
+          models_to_try = [
+              "gemini-2.5-flash",
+              "gemini-2.0-flash",
+              "gemini-2.5-pro"
+          ]
 
-          data = json.loads(response.text)
-          subject = data.get("subject")
-          body = data.get("body")
-          labels = data.get("labels", "ICU Nursing, Critical Care, Bedside Nursing, Clinical Pearls, Pharmacology")
-          search_description = data.get("search_description", "")
+          article_data = None
+
+          for model in models_to_try:
+              url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+              payload = {
+                  "contents": [{"parts": [{"text": prompt}]}],
+                  "generationConfig": {
+                      "response_mime_type": "application/json"
+                  }
+              }
+
+              print(f"Calling model via REST API: {model}...")
+              res = requests.post(url, json=payload, headers={"Content-Type": "application/json"})
+
+              if res.status_code == 200:
+                  try:
+                      raw_json = res.json()['candidates'][0]['content']['parts'][0]['text']
+                      article_data = json.loads(raw_json)
+                      print(f"Success with model: {model}!")
+                      break
+                  except Exception as parse_err:
+                      print(f"Failed to parse JSON from {model}: {parse_err}")
+              else:
+                  print(f"Model {model} returned status {res.status_code}: {res.text[:200]}")
+                  time.sleep(3)
+
+          if not article_data:
+              raise RuntimeError("Generation failed across all models. Check API status.")
+
+          subject = article_data.get("subject")
+          body = article_data.get("body")
+          labels = article_data.get("labels", "ICU Nursing, Critical Care, Bedside Nursing, Clinical Pearls, Pharmacology")
+          search_description = article_data.get("search_description", "")
 
           metadata_box = f"""
           <hr style="margin-top: 40px; border: 0; border-top: 2px solid #0056b3;" />
@@ -129,7 +138,6 @@ jobs:
           print(f"Generated Clinical Topic: {subject}")
           print(f"Generated Labels: {labels}")
 
-          # 2. Email Setup
           sender = os.environ['SENDER_EMAIL'].strip()
           password = os.environ['SENDER_APP_PASSWORD'].strip().replace(" ", "")
           recipient = os.environ['BLOGGER_POST_EMAIL'].strip()
@@ -142,7 +150,6 @@ jobs:
           html_part = MIMEText(full_content, 'html')
           msg.attach(html_part)
 
-          # 3. Send Email to Blogger
           with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
               server.login(sender, password)
               server.sendmail(sender, recipient, msg.as_string())
