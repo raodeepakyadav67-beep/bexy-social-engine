@@ -105,7 +105,7 @@ jobs:
           )
 
           # यहाँ आपके Tumblr ब्लॉग का नाम/हैंडल
-          BLOG_IDENTIFIER = "bexyhub"
+          BLOG_IDENTIFIER = "bexyhub.tumblr.com"
 
           print(f"Posting directly to Tumblr blog: {BLOG_IDENTIFIER}...")
           response = client.create_text(
