@@ -19,21 +19,24 @@ jobs:
           import os
           from requests_oauthlib import OAuth1Session
 
-          ck = os.environ['CONSUMER_KEY']
-          cs = os.environ['CONSUMER_SECRET']
+          ck = os.environ['CONSUMER_KEY'].strip()
+          cs = os.environ['CONSUMER_SECRET'].strip()
 
-          oauth = OAuth1Session(ck, client_secret=cs)
-          fetch_response = oauth.fetch_request_token('https://www.tumblr.com/oauth/request_token')
+          oauth = OAuth1Session(ck, client_secret=cs, callback_uri='https://bexyhub.in')
           
-          resource_owner_key = fetch_response.get('oauth_token')
-          resource_owner_secret = fetch_response.get('oauth_token_secret')
-          
-          authorization_url = oauth.authorization_url('https://www.tumblr.com/oauth/authorize')
-          
-          print("=" * 60)
-          print("🔗 कृपया इस लिंक को ब्राउज़र में खोलकर Authorize करें:")
-          print(authorization_url)
-          print("=" * 60)
-          print(f"TEMP_KEY={resource_owner_key}")
-          print(f"TEMP_SECRET={resource_owner_secret}")
+          try:
+              fetch_response = oauth.fetch_request_token('https://www.tumblr.com/oauth/request_token')
+              resource_owner_key = fetch_response.get('oauth_token')
+              resource_owner_secret = fetch_response.get('oauth_token_secret')
+              
+              authorization_url = oauth.authorization_url('https://www.tumblr.com/oauth/authorize')
+              
+              print("=" * 60)
+              print("🔗 ऑथराइज़ेशन लिंक:")
+              print(authorization_url)
+              print("=" * 60)
+              print(f"OAUTH_TOKEN_SECRET={resource_owner_secret}")
+          except Exception as e:
+              print(f"Error: {e}")
+              raise e
           EOF
