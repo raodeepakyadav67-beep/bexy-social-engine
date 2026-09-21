@@ -3,7 +3,7 @@ name: Daily Blogger Clinical Guide
 on:
   workflow_dispatch:
   schedule:
-    - cron: '30 6 * * *'
+    - cron: '30 6 * * *' # Daily 12:00 PM IST
 
 jobs:
   publish_blogger:
@@ -41,30 +41,45 @@ jobs:
           gemini_client = genai.Client(api_key=os.environ['GEMINI_API_KEY'].strip())
 
           prompt = """
-          You are Deepak Kumar, an MSc Nursing Officer and Intensive Care Specialist with real clinical experience across CTVS, MICU, Emergency, and Neuro ICU.
-          Write an exhaustive, high-yield bilingual clinical study guide / article (1200 to 1800 words) for bedside nursing officers and ICU teams.
-          Bridge the gap between textbook theory and intense bedside ICU practice. Avoid basic textbook definitions or generic AI summaries.
+          You are Deepak Kumar, an MSc Nursing Officer and Intensive Care Specialist with intense bedside clinical experience across CTVS, MICU, Emergency, and Neuro ICU.
+          Write an exhaustive, high-yield, deeply practical clinical study guide / article (1200 to 1800 words) for nursing officers, ICU specialists, and medical students.
+          Bridge the gap between textbook theory and real bedside clinical practice. Avoid generic AI fluff or basic textbook definitions.
 
-          Structure and Language Tone:
-          - Core physiological definitions, criteria, and hemodynamic equations in authoritative English.
-          - Bedside Practical Pearls / Ground Reality in natural Hindi/Hinglish explaining what monitors actually show and how to respond safely.
+          STRICT STRUCTURAL AND PARAGRAPH-BY-PARAGRAPH RULES:
+          Every single section must strictly alternate paragraph-by-paragraph:
+          - Heading (<h2> or <h3>)
+          - Concise, high-impact clinical paragraph in authoritative English.
+          - Immediate clinical explanation paragraph in natural, practical Hindi/Hinglish (explaining real monitor readings, bedside action, rationale).
+          - Continue this alternating format across all sections.
 
-          HTML Formatting Structure (use <h2>, <h3>, <p>, <ul>, <li>, <strong>):
-          - <h2>Clinical Presentation & Hemodynamic Assessment</h2>
-          - <h2>Pathophysiologic Nuances & Red Flags</h2>
-          - <h2>Bedside Clinical Rationale: What the Books Don't Tell You (Bilingual Breakdown)</h2>
-          - <h2>Step-by-Step Nursing Interventions & Drug Titration Pearls</h2>
-          - <h2>Critical Pitfalls to Prevent at the Bedside</h2>
-          - <p><em>Published via Bexyhub Clinical Engine | Nursing Excellence Hub</em></p>
+          Required Sections to Cover (with alternating English & Hindi paragraphs):
+          1. Clinical Scenario & Hemodynamic Presentation (Vitals, Arterial line/CVP context, Acute signs)
+          2. Pathophysiologic Nuances & Red Flags (Underlying failure mechanism & early warning signs)
+          3. Bedside Clinical Rationale: What Books Don't Tell You (Practical ICU nurse reality)
+          4. Step-by-Step Nursing Interventions & Drug Titration Pearls (Inotropes, vasopressors, sedation, ventilator checks)
+          5. Critical Pitfalls & Complications to Prevent at the Bedside
 
-          Output STRICTLY valid JSON with two fields:
+          Author Bio Section at the End:
+          - Heading: <h2>About the Author / लेखक परिचय</h2>
+          - One dedicated professional paragraph in English:
+            "Deepak Kumar is an MSc Nursing Officer and Intensive Care Specialist with years of clinical expertise across CTVS, MICU, Cath Lab, Emergency, and Neuro ICU departments. Through Bexyhub, he combines rigorous clinical research with real-world bedside experience to mentor healthcare professionals and bridge the gap between academic textbooks and live patient care."
+          - One dedicated practical paragraph in Hindi:
+            "दीपक कुमार एक एमएससी नर्सिंग ऑफिसर और आईसीयू विशेषज्ञ (Intensive Care Specialist) हैं, जिनके पास सीटीवीएस (CTVS), एमआईसीयू (MICU), इमरजेंसी और न्यूरो आईसीयू में गंभीर मरीजों की देखभाल का गहरा व्यावहारिक अनुभव है। उनका उद्देश्य किताबी थ्योरी और आईसीयू बेडसाइड की वास्तविक चुनौतियों के बीच की दूरी को मिटाना है, ताकि हर नर्सिंग ऑफिसर और मेडिकल प्रोफेशनल को रियल-वर्ल्ड क्लिनिकल निर्णय लेने का सटीक ज्ञान मिल सके।"
+
+          Metadata Requirements:
+          - Exactly 5 to 6 high-yield clinical labels separated by commas.
+          - A 2-line SEO-friendly Search Description (120-140 characters).
+
+          Output STRICTLY valid JSON with these four fields:
           {
-            "subject": "Compelling clinical title starting with Clinical Guide:",
-            "body": "Full HTML formatted article"
+            "subject": "Compelling clinical title starting with 'Clinical Guide:'",
+            "body": "Full HTML formatted article following the strict English paragraph then Hindi paragraph rule",
+            "labels": "Comma-separated labels (e.g., ICU Nursing, Bedside Protocols, Critical Care, Hemodynamics, Clinical Pearls, Pharmacology)",
+            "search_description": "2-line high-impact clinical summary for search engines under 140 characters."
           }
           """
 
-          print("Generating article using gemini-3.6-flash...")
+          print("Generating alternating English-Hindi article using gemini-3.6-flash...")
           response = gemini_client.models.generate_content(
               model='gemini-3.6-flash',
               contents=prompt,
@@ -76,7 +91,29 @@ jobs:
           data = json.loads(response.text)
           subject = data.get("subject")
           body = data.get("body")
+          labels = data.get("labels", "ICU Nursing, Critical Care, Bedside Nursing, Clinical Pearls, Pharmacology")
+          search_description = data.get("search_description", "")
+
+          # Beautiful, cleanly formatted metadata & author box at the bottom
+          metadata_box = f"""
+          <hr style="margin-top: 40px; border: 0; border-top: 2px solid #0056b3;" />
+          <div style="background-color: #f8f9fa; border-left: 5px solid #0056b3; padding: 18px; margin-top: 25px; border-radius: 4px; font-family: Arial, sans-serif; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+              <h3 style="margin-top: 0; color: #0056b3; font-size: 18px;">📌 Article SEO & Indexing Data</h3>
+              <p style="margin-bottom: 5px; font-size: 14px;"><strong>🏷️ Labels (Categories):</strong></p>
+              <div style="background: #ffffff; padding: 10px; border: 1px dashed #6c757d; border-radius: 4px; font-family: monospace; font-size: 13px; color: #212529;">{labels}</div>
+              
+              <p style="margin-top: 15px; margin-bottom: 5px; font-size: 14px;"><strong>🔍 Search Description:</strong></p>
+              <div style="background: #ffffff; padding: 10px; border: 1px dashed #6c757d; border-radius: 4px; font-family: monospace; font-size: 13px; color: #212529;">{search_description}</div>
+          </div>
+          <p style="text-align: center; margin-top: 30px; font-size: 13px; color: #6c757d;">
+              <em>Published automatically via Bexyhub Clinical Engine | Nursing Excellence Hub</em>
+          </p>
+          """
+
+          full_content = body + metadata_box
+
           print(f"Generated Clinical Topic: {subject}")
+          print(f"Generated Labels: {labels}")
 
           # 2. Email Setup
           sender = os.environ['SENDER_EMAIL'].strip()
@@ -88,7 +125,7 @@ jobs:
           msg['To'] = recipient
           msg['Subject'] = subject
 
-          html_part = MIMEText(body, 'html')
+          html_part = MIMEText(full_content, 'html')
           msg.attach(html_part)
 
           # 3. Send Email to Blogger
@@ -96,5 +133,5 @@ jobs:
               server.login(sender, password)
               server.sendmail(sender, recipient, msg.as_string())
 
-          print("Successfully posted article to Blogger via Secret Email!")
+          print("Successfully posted article with author bio & metadata to Blogger!")
           EOF
