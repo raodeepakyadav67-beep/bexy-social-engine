@@ -3,53 +3,63 @@ name: Auto Clinical Post to Telegram & LinkedIn
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 4 * * *'
+    - cron: '0 4 * * *' # रोज़ाना सुबह 9:30 AM IST
 
 jobs:
   post-clinical-pearl:
     runs-on: ubuntu-latest
     steps:
-      - name: Generate AI Content and Post to Both Platforms
+      - name: Generate Natural Clinical Content and Post
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
           LINKEDIN_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
         run: |
-          PROMPT="Write a high-yield ICU Clinical Pearl for critical care nurses. Topics: Arterial line dampening, Noradrenaline titration, ABG interpretation, or ventilator pearls. Include bedside rules, bullet points, emojis, and hashtags #ICUNursing #CriticalCare #Bexyhub. Keep it under 90 words."
+          # 1. बिना किसी स्टार या बुलेट के नेचुरल क्लिनिकल प्रॉम्प्ट
+          PROMPT="Act as an experienced Critical Care Nursing Specialist. Write a high-yield, realistic ICU clinical note for bedside nurses. 
+
+          Follow this plain text format strictly without markdown formatting:
+          Line 1: Bexyhub Education
+          Line 2: [Concise Clinical Title, e.g., Arterial Line Overdamping in Shock]
+          Line 3: (Leave empty line)
+          Line 4: A single, natural, authoritative clinical paragraph of 5 to 6 sentences explaining real-world ICU bedside reality, rationale, and nursing action. Strictly DO NOT use any asterisks (*), do not use bullet points, do not use quotation marks, and avoid generic robotic phrasing.
+          Line 5: (Leave empty line)
+          Line 6: Official Portal: https://bexyhub.in"
 
           JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{contents: [{parts: [{text: $prompt}]}]}')
 
           POST_TEXT=""
-          # 503 लोड से बचने के लिए कई मॉडल्स की लिस्ट और ऑटो-रीट्राई
           MODELS=("gemini-2.5-flash" "gemini-2.5-flash-lite" "gemini-3.5-flash" "gemini-1.5-flash")
 
           for MODEL in "${MODELS[@]}"; do
-            echo "Attempting with model: $MODEL..."
+            echo "Requesting content from $MODEL..."
             RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=$GEMINI_API_KEY" \
               -H "Content-Type: application/json" \
               -d "$JSON_PAYLOAD")
 
             CANDIDATE=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
             if [ -n "$CANDIDATE" ]; then
-              POST_TEXT="$CANDIDATE"
-              echo "✅ Success with $MODEL!"
+              # किसी भी बचे हुए एस्टरिस्क (*) को पूरी तरह साफ़ करना
+              POST_TEXT=$(echo "$CANDIDATE" | tr -d '*')
+              echo "✅ Successfully generated using $MODEL!"
               break
             else
-              echo "⚠️ $MODEL was busy or unavailable. Trying next model in 3 seconds..."
-              sleep 3
+              echo "⚠️ Model busy, switching to backup..."
+              sleep 2
             fi
           done
 
           if [ -z "$POST_TEXT" ]; then
-            echo "❌ All models failed. Last response: $RESPONSE"
+            echo "❌ Gemini generation error: $RESPONSE"
             exit 1
           fi
 
-          echo "✅ AI Content generated successfully!"
+          echo "Preview of post:"
+          echo "$POST_TEXT"
 
-          # 2. Telegram पर पोस्ट भेजना
-          echo "📤 Posting to Telegram..."
+          # 2. Telegram पर साफ़ टेक्स्ट भेजना
+          echo "📤 Posting clean text to Telegram..."
           TG_RES=$(curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
             --data-urlencode "chat_id=$CHANNEL_ID" \
             --data-urlencode "text=$POST_TEXT")
@@ -64,7 +74,6 @@ jobs:
             PERSON_ID=$(echo "$USER_INFO" | jq -r '.sub // empty')
             
             if [ -n "$PERSON_ID" ]; then
-              echo "Found LinkedIn Person ID: $PERSON_ID"
               AUTHOR_URN="urn:li:person:$PERSON_ID"
 
               echo "📤 Posting to LinkedIn..."
@@ -93,7 +102,5 @@ jobs:
 
               echo "LinkedIn Response: $LI_RES"
               echo "✅ Successfully posted to LinkedIn!"
-            else
-              echo "⚠️ Could not fetch LinkedIn Person ID: $USER_INFO"
             fi
           fi
