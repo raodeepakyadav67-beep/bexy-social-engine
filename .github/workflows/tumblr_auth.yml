@@ -1,10 +1,10 @@
-name: Get Real Tumblr Token
+name: Generate Tumblr Keys Direct
 
 on:
   workflow_dispatch:
 
 jobs:
-  get_token:
+  auth:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Python
@@ -12,27 +12,31 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
-        run: pip install requests_oauthlib
+      - name: Install pytumblr
+        run: pip install pytumblr requests_oauthlib
 
-      - name: Generate Auth URL
+      - name: Obtain Real Tokens
         run: |
           python - << 'EOF'
+          import urllib.parse
           from requests_oauthlib import OAuth1Session
 
-          CONSUMER_KEY = "JlignQZnFRCvqGyZQ6TGHmC7Z9bE19JVESSAZdEvKkrc39P2Th"
-          CONSUMER_SECRET = "kWBs9rVOe3hfQe3p8vZYYTmxKNN5byUbxiog9lYSVh3GxMXr"
-          CALLBACK_URI = "http://localhost:8080/callback"
+          # Bexyhub Auto की कुंजियाँ
+          CONSUMER_KEY = "kBzSXcYOmw1ROKV6lDmfeYLPPoZQimtrWKoLD5ZkKQLCqAutkp"
+          CONSUMER_SECRET = "3vhWHCIPtgyfpBmjT33jskQjg2dKYONlkRPMHIOOOVEhvJRZzQ"
 
-          oauth = OAuth1Session(CONSUMER_KEY, client_secret=CONSUMER_SECRET, callback_uri=CALLBACK_URI)
-          fetch_response = oauth.fetch_request_token("https://www.tumblr.com/oauth/request_token")
-          
-          resource_owner_key = fetch_response.get('oauth_token')
-          resource_owner_secret = fetch_response.get('oauth_token_secret')
+          oauth = OAuth1Session(CONSUMER_KEY, client_secret=CONSUMER_SECRET)
+          try:
+              fetch_response = oauth.fetch_request_token("https://www.tumblr.com/oauth/request_token")
+              owner_key = fetch_response.get('oauth_token')
+              owner_secret = fetch_response.get('oauth_token_secret')
 
-          print("\n" + "="*50)
-          print("STEP 1: OPEN THIS LINK IN YOUR BROWSER:")
-          authorization_url = oauth.authorization_url("https://www.tumblr.com/oauth/authorize")
-          print(authorization_url)
-          print("="*50 + "\n")
+              auth_url = oauth.authorization_url("https://www.tumblr.com/oauth/authorize")
+              print("\n" + "="*60)
+              print("IS URL KO BROWSER ME KHOL KAR ALLOW DABAYEIN:")
+              print(auth_url)
+              print("="*60 + "\n")
+              print("TEMP_SECRET:", owner_secret)
+          except Exception as e:
+              print("ERROR DETAILS:", e)
           EOF
