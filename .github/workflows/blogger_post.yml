@@ -78,40 +78,35 @@ jobs:
           }
           """
 
-          models_to_try = [
-              "gemini-2.5-flash",
-              "gemini-2.0-flash",
-              "gemini-2.5-pro"
-          ]
+          url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}"
+          payload = {
+              "contents": [{"parts": [{"text": prompt}]}],
+              "generationConfig": {
+                  "response_mime_type": "application/json"
+              }
+          }
 
           article_data = None
 
-          for model in models_to_try:
-              url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-              payload = {
-                  "contents": [{"parts": [{"text": prompt}]}],
-                  "generationConfig": {
-                      "response_mime_type": "application/json"
-                  }
-              }
-
-              print(f"Calling model via REST API: {model}...")
+          for attempt in range(1, 4):
+              print(f"Calling gemini-3.6-flash (Attempt {attempt}/3)...")
               res = requests.post(url, json=payload, headers={"Content-Type": "application/json"})
-
               if res.status_code == 200:
                   try:
                       raw_json = res.json()['candidates'][0]['content']['parts'][0]['text']
                       article_data = json.loads(raw_json)
-                      print(f"Success with model: {model}!")
+                      print("Success generating content!")
                       break
-                  except Exception as parse_err:
-                      print(f"Failed to parse JSON from {model}: {parse_err}")
+                  except Exception as e:
+                      print(f"Error parsing JSON: {e}")
               else:
-                  print(f"Model {model} returned status {res.status_code}: {res.text[:200]}")
-                  time.sleep(3)
+                  print(f"Attempt {attempt} returned status {res.status_code}: {res.text[:200]}")
+                  if attempt < 3:
+                      print("Waiting 10 seconds before retry...")
+                      time.sleep(10)
 
           if not article_data:
-              raise RuntimeError("Generation failed across all models. Check API status.")
+              raise RuntimeError("Generation failed after multiple attempts.")
 
           subject = article_data.get("subject")
           body = article_data.get("body")
