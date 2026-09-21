@@ -23,22 +23,20 @@ jobs:
           access_token = "aUCQ6BqiOrfODgDU6XE3n1opRn38CqFLcNsTFUCbAbgTRpVy0q"
 
           headers = {
-              "Authorization": f"Bearer {access_token}",
-              "Content-Type": "application/json"
+              "Authorization": f"Bearer {access_token}"
           }
 
+          # Standard Legacy Post Endpoint (Most Reliable)
           post_url = "https://api.tumblr.com/v2/blog/bexyhub/post"
 
-          payload = {
-              "content": [
-                  {
-                      "type": "text",
-                      "text": "Clinical Automation Verified & Live!\n\nDeepak Bexy automated posting pipeline via GitHub Actions is now officially active and operational."
-                  }
-              ]
+          data = {
+              "type": "text",
+              "title": "Clinical Automation Engine Live",
+              "body": "<p>Deepak Bexy automated pipeline via GitHub Actions is now officially active and operational.</p>",
+              "tags": "clinical,nursing,education,bexyhub"
           }
 
-          res = requests.post(post_url, headers=headers, json=payload)
+          res = requests.post(post_url, headers=headers, data=data)
           print("POST STATUS CODE:", res.status_code)
           print("RESPONSE JSON:", res.json())
           EOF
