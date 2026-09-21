@@ -1,10 +1,10 @@
-name: Generate Tumblr Keys
+name: Get Real Tumblr Token
 
 on:
   workflow_dispatch:
 
 jobs:
-  auth:
+  get_token:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Python
@@ -12,21 +12,27 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install pytumblr
-        run: pip install pytumblr
+      - name: Install dependencies
+        run: pip install requests_oauthlib
 
-      - name: Check Direct Client
+      - name: Generate Auth URL
         run: |
           python - << 'EOF'
-          import pytumblr
+          from requests_oauthlib import OAuth1Session
 
-          # डायरेक्ट क्रेडेंशियल्स टेस्ट
-          c_key = "JlignQZnFRCvqGyZQ6TGHmC7Z9bE19JVESSAZdEvKkrc39P2Th"
-          c_sec = "kWBs9rVOe3hfQe3p8vZYYTmxKNN5byUbxiog9lYSVh3GxMXr"
-          o_tok = "ksHxpy4LpeMyMuN640nxDrDfErAb8IpJ0K9SW0SIeL47hkSDyK"
-          o_sec = "MPUo30BMfMnDuSt9OmfTDjkeNabl2EGLI4aGJxmbjAZKLf7Nqf"
+          CONSUMER_KEY = "JlignQZnFRCvqGyZQ6TGHmC7Z9bE19JVESSAZdEvKkrc39P2Th"
+          CONSUMER_SECRET = "kWBs9rVOe3hfQe3p8vZYYTmxKNN5byUbxiog9lYSVh3GxMXr"
+          CALLBACK_URI = "http://localhost:8080/callback"
 
-          client = pytumblr.TumblrRestClient(c_key, c_sec, o_tok, o_sec)
-          res = client.info()
-          print("DIRECT INFO RESULT:", res)
+          oauth = OAuth1Session(CONSUMER_KEY, client_secret=CONSUMER_SECRET, callback_uri=CALLBACK_URI)
+          fetch_response = oauth.fetch_request_token("https://www.tumblr.com/oauth/request_token")
+          
+          resource_owner_key = fetch_response.get('oauth_token')
+          resource_owner_secret = fetch_response.get('oauth_token_secret')
+
+          print("\n" + "="*50)
+          print("STEP 1: OPEN THIS LINK IN YOUR BROWSER:")
+          authorization_url = oauth.authorization_url("https://www.tumblr.com/oauth/authorize")
+          print(authorization_url)
+          print("="*50 + "\n")
           EOF
