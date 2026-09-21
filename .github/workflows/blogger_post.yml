@@ -1,4 +1,42 @@
-# 1. Gemini AI Client Setup with Automatic Fallback
+name: Daily Blogger Clinical Guide
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 6 * * *'
+
+jobs:
+  publish_blogger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          pip install google-genai
+
+      - name: Generate Clinical Article & Send to Blogger
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+          SENDER_APP_PASSWORD: ${{ secrets.SENDER_APP_PASSWORD }}
+          BLOGGER_POST_EMAIL: ${{ secrets.BLOGGER_POST_EMAIL }}
+        run: |
+          python - << 'EOF'
+          import os
+          import json
+          import smtplib
+          from email.mime.multipart import MIMEMultipart
+          from email.mime.text import MIMEText
+          from google import genai
+          from google.genai import types
+
           gemini_client = genai.Client(api_key=os.environ['GEMINI_API_KEY'].strip())
 
           prompt = """
@@ -8,7 +46,7 @@
 
           Structure and Language Tone:
           - Core physiological definitions, criteria, and hemodynamic equations in authoritative English.
-          - 'Bedside Practical Pearls / Ground Reality' in natural Hindi/Hinglish explaining what monitors actually show and how to respond safely.
+          - Bedside Practical Pearls / Ground Reality in natural Hindi/Hinglish explaining what monitors actually show and how to respond safely.
 
           HTML Formatting Structure (use <h2>, <h3>, <p>, <ul>, <li>, <strong>):
           - <h2>Clinical Presentation & Hemodynamic Assessment</h2>
@@ -20,12 +58,11 @@
 
           Output STRICTLY valid JSON with two fields:
           {
-            "subject": "Compelling clinical title starting with 'Clinical Guide:'",
+            "subject": "Compelling clinical title starting with Clinical Guide:",
             "body": "Full HTML formatted article"
           }
           """
 
-          # Try multiple models if one gives 503 Overloaded
           candidate_models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
           response = None
 
@@ -52,3 +89,22 @@
           subject = data.get("subject")
           body = data.get("body")
           print(f"Generated Clinical Topic: {subject}")
+
+          sender = os.environ['SENDER_EMAIL'].strip()
+          password = os.environ['SENDER_APP_PASSWORD'].strip().replace(" ", "")
+          recipient = os.environ['BLOGGER_POST_EMAIL'].strip()
+
+          msg = MIMEMultipart('alternative')
+          msg['From'] = sender
+          msg['To'] = recipient
+          msg['Subject'] = subject
+
+          html_part = MIMEText(body, 'html')
+          msg.attach(html_part)
+
+          with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+              server.login(sender, password)
+              server.sendmail(sender, recipient, msg.as_string())
+
+          print("Successfully posted article to Blogger via Secret Email!")
+          EOF
