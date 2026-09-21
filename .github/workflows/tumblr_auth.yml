@@ -1,4 +1,4 @@
-name: Test Direct Tumblr Post
+name: Post Clinical Update to Tumblr
 
 on:
   workflow_dispatch:
@@ -15,39 +15,29 @@ jobs:
       - name: Install pytumblr
         run: pip install pytumblr
 
-      - name: Create Test Post
+      - name: Publish Post
+        env:
+          CONSUMER_KEY: ${{ secrets.TUMBLR_CONSUMER_KEY }}
+          CONSUMER_SECRET: ${{ secrets.TUMBLR_CONSUMER_SECRET }}
+          OAUTH_TOKEN: ${{ secrets.TUMBLR_OAUTH_TOKEN }}
+          OAUTH_SECRET: ${{ secrets.TUMBLR_OAUTH_SECRET }}
         run: |
           python - << 'EOF'
+          import os
           import pytumblr
 
-          # Bexyhub Auto की स्थायी कुंजियाँ
-          CONSUMER_KEY = "k8zSXcYOmw1R0KV6lDmfeYLpPoZQ1mtrWKoLD5ZkKQLCqAutkp"
-          CONSUMER_SECRET = "3vhWHCiPtgyfpBmjT33jsKQjg2dKYONlkRPmHIOOOVEhvjRZzQ"
-          OAUTH_TOKEN = "Z70SrHgIm6QPgzxbBueSoA1eGusYExOj2PC3jKElaFkyoYb4mw"
-          OAUTH_SECRET = "SwCSGWXRNWclVUBt8JSW1QMog0OQ6BI1E1swy5hTzyg4Rgq7wU"
-
           client = pytumblr.TumblrRestClient(
-              CONSUMER_KEY,
-              CONSUMER_SECRET,
-              OAUTH_TOKEN,
-              OAUTH_SECRET
+              os.environ['CONSUMER_KEY'],
+              os.environ['CONSUMER_SECRET'],
+              os.environ['OAUTH_TOKEN'],
+              os.environ['OAUTH_SECRET']
           )
 
-          # पहले यूज़र और ब्लॉग की जानकारी निकालें
-          info = client.info()
-          print("USER INFO:", info)
-
-          # पहले उपलब्ध ब्लॉग पर पोस्ट करें
-          blogs = info.get('user', {}).get('blogs', [])
-          if blogs:
-              blog_name = blogs[0]['name']
-              print("TARGET BLOG:", blog_name)
-              res = client.create_text(
-                  blog_name,
-                  title="Clinical Automation Verified",
-                  body="Tumblr API connection is fully verified and active via GitHub Actions."
-              )
-              print("POST RESPONSE:", res)
-          else:
-              print("No blog found for this account!")
+          # bexyhub ब्लॉग पर ऑटोमैटिक पोस्ट
+          res = client.create_text(
+              'bexyhub',
+              title='Clinical Post Engine Live',
+              body='Deepak Bexy automated posting pipeline via GitHub Actions is now active and verified.'
+          )
+          print("POST STATUS:", res)
           EOF
