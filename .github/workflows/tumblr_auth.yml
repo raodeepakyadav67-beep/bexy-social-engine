@@ -1,114 +1,32 @@
-name: Post Clinical Notes to Tumblr
+name: Generate Tumblr Keys
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 11 * * *' # रोज़ाना शाम 04:30 PM IST
 
 jobs:
-  post:
+  auth:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install Dependencies
-        run: |
-          pip install pytumblr requests
+      - name: Install pytumblr
+        run: pip install pytumblr
 
-      - name: Generate Content and Post to Tumblr
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          CONSUMER_KEY: ${{ secrets.TUMBLR_CONSUMER_KEY }}
-          CONSUMER_SECRET: ${{ secrets.TUMBLR_CONSUMER_SECRET }}
-          OAUTH_TOKEN: ${{ secrets.TUMBLR_OAUTH_TOKEN }}
-          OAUTH_SECRET: ${{ secrets.TUMBLR_OAUTH_SECRET }}
+      - name: Check Direct Client
         run: |
           python - << 'EOF'
-          import os
-          import random
           import pytumblr
-          import requests
 
-          TOPICS = [
-              "Bedside Hemodynamic Instability: SVR vs PVR Nuances in Post-Op Cardiac Care",
-              "Mechanical Ventilation: Driving Pressure Optimization in Severe ARDS",
-              "Sedation Vacation and CAM-ICU Delirium Screening Ground Reality",
-              "Inotrope Selection: Dobutamine vs Milrinone in Cardiogenic Shock",
-              "CRRT Bedside Troubleshooting: Filter Clotting and Transmembrane Pressure Spikes",
-              "Severe Metabolic Acidosis: When Bicarbonate Helps and When It Kills",
-              "Neuro ICU: Targeted Temperature Management and Secondary Brain Injury Prevention"
-          ]
-          selected_topic = random.choice(TOPICS)
+          # डायरेक्ट क्रेडेंशियल्स टेस्ट
+          c_key = "JlignQZnFRCvqGyZQ6TGHmC7Z9bE19JVESSAZdEvKkrc39P2Th"
+          c_sec = "kWBs9rVOe3hfQe3p8vZYYTmxKNN5byUbxiog9lYSVh3GxMXr"
+          o_tok = "ksHxpy4LpeMyMuN640nxDrDfErAb8IpJ0K9SW0SIeL47hkSDyK"
+          o_sec = "MPUo30BMfMnDuSt9OmfTDjkeNabl2EGLI4aGJxmbjAZKLf7Nqf"
 
-          prompt = f"""
-          Act as Deepak Kumar, an MSc Nursing Officer and Intensive Care Specialist.
-          Write an in-depth bedside clinical case study on: '{selected_topic}'.
-          Target: Bedside ICU Nurses and Critical Care Fellows.
-
-          Follow this format strictly:
-          Line 1: Concise Clinical Title
-          Line 2 onwards: Clean HTML body with <h3> headings, <p> paragraphs, <ul> and <li> bullet points, and <strong> for key drugs/values.
-          Do not include JSON formatting or markdown backticks.
-          """
-
-          api_key = os.environ['GEMINI_API_KEY'].strip()
-          url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key={api_key}"
-          
-          payload = {
-              "contents": [{"parts": [{"text": prompt}]}],
-              "generationConfig": {
-                  "temperature": 1.0,
-                  "topP": 0.95
-              }
-          }
-
-          print("Generating fresh clinical content for Tumblr...")
-          res = requests.post(url, json=payload, headers={"Content-Type": "application/json"})
-          
-          if res.status_code != 200:
-              raise RuntimeError(f"Gemini API failed with status {res.status_code}: {res.text}")
-
-          raw_text = res.json()['candidates'][0]['content']['parts'][0]['text'].strip()
-          lines = raw_text.splitlines()
-
-          post_title = lines[0].replace("#", "").strip() if len(lines) > 0 else selected_topic
-          post_body = "\n".join(lines[1:]).strip()
-
-          footer = """
-          <hr/>
-          <p><strong>Published by Deepak Kumar | MSc Nursing Officer & ICU Specialist</strong><br/>
-          Official Portal: <a href="https://bexyhub.in">bexyhub.in</a></p>
-          """
-          full_html = post_body + footer
-
-          client = pytumblr.TumblrRestClient(
-              os.environ['CONSUMER_KEY'].strip(),
-              os.environ['CONSUMER_SECRET'].strip(),
-              os.environ['OAUTH_TOKEN'].strip(),
-              os.environ['OAUTH_SECRET'].strip()
-          )
-
-          BLOG_IDENTIFIER = "bexyhub.tumblr.com"
-
-          print(f"Posting directly to Tumblr blog: {BLOG_IDENTIFIER}...")
-          response = client.create_text(
-              BLOG_IDENTIFIER,
-              state="published",
-              format="html",
-              title=post_title,
-              body=full_html,
-              tags=["ICUNursing", "CriticalCare", "BedsideNursing", "ClinicalPearls", "Bexyhub"]
-          )
-
-          print("Tumblr Response:", response)
-          if 'id' in response:
-              print(f"✅ Successfully posted to Tumblr! Post ID: {response['id']}")
-          else:
-              raise RuntimeError(f"Tumblr Posting Error: {response}")
+          client = pytumblr.TumblrRestClient(c_key, c_sec, o_tok, o_sec)
+          res = client.info()
+          print("DIRECT INFO RESULT:", res)
           EOF
