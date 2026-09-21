@@ -1,0 +1,118 @@
+name: Auto Clinical Pin to Pinterest
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 6 * * *' # रोज़ाना दोपहर 12:00 PM IST (06:30 UTC)
+
+jobs:
+  post-pinterest-pin:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Clinical Content & Post to Pinterest
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PINTEREST_TOKEN: ${{ secrets.PINTEREST_ACCESS_TOKEN }}
+        run: |
+          # 1. Pinterest के लिए साफ़ और आकर्षक क्लिनिकल प्रॉम्प्ट
+          PROMPT="Act as an expert Critical Care Nursing Specialist. Write a high-authority clinical pearl note for Pinterest.
+          
+          Format strictly as:
+          TITLE: [Concise high-yield ICU topic under 60 characters, e.g., Arterial Line Dampening Rationale]
+          NOTE: A concise, highly professional clinical explanation of 4 to 5 sentences explaining real bedside rationale, physiology, and actionable nursing logic. Strictly DO NOT use asterisks (*), do not use bullet points, and do not use quotation marks."
+
+          JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{contents: [{parts: [{text: $prompt}]}]}')
+
+          PIN_TEXT=""
+          MODELS=("gemini-2.5-flash" "gemini-2.5-flash-lite" "gemini-3.5-flash" "gemini-1.5-flash")
+
+          for MODEL in "${MODELS[@]}"; do
+            echo "Requesting content from $MODEL..."
+            RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=$GEMINI_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d "$JSON_PAYLOAD")
+
+            CANDIDATE=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
+            if [ -n "$CANDIDATE" ]; then
+              PIN_TEXT=$(echo "$CANDIDATE" | tr -d '*')
+              echo "✅ Successfully generated with $MODEL!"
+              break
+            else
+              echo "⚠️ Model busy, retrying with next..."
+              sleep 2
+            fi
+          done
+
+          if [ -z "$PIN_TEXT" ]; then
+            echo "❌ Failed to generate text: $RESPONSE"
+            exit 1
+          fi
+
+          # टाइटल और डिस्क्रिप्शन अलग-अलग निकालना
+          PIN_TITLE=$(echo "$PIN_TEXT" | grep "^TITLE:" | sed 's/^TITLE:[ ]*//' | head -n 1)
+          PIN_DESC=$(echo "$PIN_TEXT" | grep -A 10 "^NOTE:" | sed 's/^NOTE:[ ]*//' | tr '\n' ' ' | sed 's/  */ /g')
+
+          if [ -z "$PIN_TITLE" ]; then
+            PIN_TITLE="ICU Clinical Pearls | Bexyhub Education"
+          fi
+
+          FULL_DESCRIPTION="Bexyhub Education - ${PIN_DESC} Official Clinical Portal: https://bexyhub.in #CriticalCare #ICUNursing #Bexyhub"
+
+          echo "Title: $PIN_TITLE"
+          echo "Description: $FULL_DESCRIPTION"
+
+          # 2. Pinterest Board ID ऑटोमैटिक प्राप्त करना
+          echo "🔍 Fetching Board ID for ICU Clinical Pearls..."
+          BOARDS_RES=$(curl -s -X GET "https://api.pinterest.com/v5/boards" \
+            -H "Authorization: Bearer $PINTEREST_TOKEN")
+
+          BOARD_ID=$(echo "$BOARDS_RES" | jq -r '.items[] | select(.name | test("ICU Clinical Pearls"; "i")) | .id' | head -n 1)
+
+          if [ -z "$BOARD_ID" ] || [ "$BOARD_ID" = "null" ]; then
+            echo "⚠️ Exact name match not found, taking primary board..."
+            BOARD_ID=$(echo "$BOARDS_RES" | jq -r '.items[0].id // empty')
+          fi
+
+          if [ -z "$BOARD_ID" ] || [ "$BOARD_ID" = "null" ]; then
+            echo "❌ Could not find board ID. API Response: $BOARDS_RES"
+            exit 1
+          fi
+
+          echo "✅ Selected Board ID: $BOARD_ID"
+
+          # 3. Pinterest पर नया Pin पब्लिश करना (Bexyhub Logo / Image के साथ)
+          IMAGE_URL="https://bexyhub.in/wp-content/uploads/2024/05/cropped-Bexyhub-Logo.png"
+          DESTINATION_URL="https://bexyhub.in"
+
+          PIN_PAYLOAD=$(jq -n \
+            --arg board "$BOARD_ID" \
+            --arg title "$PIN_TITLE" \
+            --arg desc "$FULL_DESCRIPTION" \
+            --arg link "$DESTINATION_URL" \
+            --arg img "$IMAGE_URL" \
+            '{
+              board_id: $board,
+              title: $title,
+              description: $desc,
+              link: $link,
+              media_source: {
+                source_type: "image_url",
+                url: $img
+              }
+            }')
+
+          echo "📤 Publishing Pin to Pinterest..."
+          CREATE_PIN_RES=$(curl -s -X POST "https://api.pinterest.com/v5/pins" \
+            -H "Authorization: Bearer $PINTEREST_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$PIN_PAYLOAD")
+
+          echo "Pinterest Response: $CREATE_PIN_RES"
+
+          PIN_CREATED_ID=$(echo "$CREATE_PIN_RES" | jq -r '.id // empty')
+          if [ -n "$PIN_CREATED_ID" ] && [ "$PIN_CREATED_ID" != "null" ]; then
+            echo "🎉 Pin created successfully! Pin ID: $PIN_CREATED_ID"
+          else
+            echo "❌ Pin creation failed."
+            exit 1
+          fi
