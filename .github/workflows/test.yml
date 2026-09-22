@@ -1,126 +1,21 @@
-name: Auto Clinical Post to Telegram & LinkedIn
+# सबसे पहले आपकी API Key के लिए उपलब्ध सही मॉडल का नाम प्राप्त करना
+          MODEL=$(curl -s "https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY}" | jq -r '.models[] | select(.supportedGenerationMethods[] | contains("generateContent")) | .name' | grep -E 'flash|pro' | head -n 1)
 
-on:
-  workflow_dispatch:
-  schedule:
-    - cron: '0 1 * * *' # रोजाना सुबह 06:30 AM IST (01:00 AM UTC)
-
-jobs:
-  post-clinical-pearl:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Generate Natural Clinical Content and Post
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-          CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
-          LINKEDIN_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
-        run: |
-          # 1. क्लिनिकल टॉपिक्स लिस्ट
-          TOPICS=(
-            "Arterial Line Damping and Flush Test Pitfalls in ICU"
-            "Noradrenaline vs Vasopressin Titration in Refractory Septic Shock"
-            "Post-CABG Sudden Mediastinal Drain Cessation and Cardiac Tamponade"
-            "Recognizing Patient-Ventilator Asynchrony: Double Triggering"
-            "Neuro ICU: Cerebral Perfusion Pressure (CPP) vs ICP Spike Management"
-            "Electrolyte Emergencies: Rapid Potassium Correction and Cardiac Arrhythmias"
-            "Post-PCI Radial Artery Hematoma and Bedside Compartment Syndrome Watch"
-            "Targeted Temperature Management (TTM) Post-Cardiac Arrest Pearls"
-            "High PEEP Hazards: Right Ventricular Strain and Hemodynamic Collapse"
-            "Bedside CVP Interpretation: Volume Responsiveness vs Fluid Overload"
-          )
-
-          RANDOM_TOPIC=${TOPICS[$RANDOM % ${#TOPICS[@]}]}
-
-          # 2. छोटा और सटीक 4-5 लाइन का प्रॉम्ट
-          PROMPT="Act as Deepak Kumar, an MSc Nursing Officer and ICU Specialist. Write a short, powerful bedside clinical pearl on: '$RANDOM_TOPIC'.
-          STRICT RULES:
-          1. Exactly 4 to 5 punchy lines (Under 100 words).
-          2. No generic textbook fluff. Give a direct monitor/bedside reality that only an ICU clinician knows.
-          3. End with a 1-line Bedside Golden Rule.
-          4. Format as plain text without asterisks, quotes, or markdown headers."
-
-          # 3. JSON पेलोड
-          JSON_PAYLOAD=$(jq -n \
-            --arg prompt "$PROMPT" \
-            '{
-              contents: [{parts: [{text: $prompt}]}],
-              generationConfig: {
-                temperature: 0.8,
-                maxOutputTokens: 250
-              }
-            }')
-
-          POST_TEXT=""
-          MODELS=("gemini-1.5-flash" "gemini-1.5-pro")
-          for MODEL in "${MODELS[@]}"; do
-            echo "Requesting content from $MODEL..."
-            RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}" \
-              -H "Content-Type: application/json" \
-              -d "$JSON_PAYLOAD")
-
-            CANDIDATE=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
-            if [ -n "$CANDIDATE" ]; then
-              POST_TEXT=$(echo "$CANDIDATE" | tr -d '*#"')
-              echo "✅ Successfully generated using $MODEL!"
-              break
-            else
-              echo "⚠️ Model busy or failed, trying next..."
-              sleep 2
-            fi
-          done
-
-          if [ -z "$POST_TEXT" ]; then
-            echo "❌ Gemini generation error: $RESPONSE"
-            exit 1
+          if [ -z "$MODEL" ]; then
+            MODEL="models/gemini-1.5-flash-latest"
           fi
 
-          echo "Preview of post:"
-          echo "$POST_TEXT"
+          echo "Using active model: $MODEL"
 
-          # 4. Telegram पर पोस्ट भेजना
-          echo "🚀 Posting clean text to Telegram..."
-          TG_RES=$(curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-            --data-urlencode "chat_id=${CHANNEL_ID}" \
-            --data-urlencode "text=${POST_TEXT}")
-          echo "Telegram Response: $TG_RES"
+          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/${MODEL}:generateContent?key=${GEMINI_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "$JSON_PAYLOAD")
 
-          # 5. LinkedIn पर पोस्ट भेजना
-          if [ -n "$LINKEDIN_TOKEN" ]; then
-            echo "🚀 Fetching LinkedIn Profile ID..."
-            USER_INFO=$(curl -s -X GET "https://api.linkedin.com/v2/userinfo" \
-              -H "Authorization: Bearer ${LINKEDIN_TOKEN}")
-
-            PERSON_ID=$(echo "$USER_INFO" | jq -r '.sub // empty')
-
-            if [ -n "$PERSON_ID" ]; then
-              AUTHOR_URN="urn:li:person:$PERSON_ID"
-
-              echo "🚀 Posting to LinkedIn..."
-              LI_PAYLOAD=$(jq -n \
-                --arg author "$AUTHOR_URN" \
-                --arg text "$POST_TEXT" \
-                '{
-                  author: $author,
-                  lifecycleState: "PUBLISHED",
-                  specificContent: {
-                    "com.linkedin.ugc.ShareContent": {
-                      shareCommentary: { text: $text },
-                      shareMediaCategory: "NONE"
-                    }
-                  },
-                  visibility: {
-                    "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"
-                  }
-                }')
-
-              LI_RES=$(curl -s -X POST "https://api.linkedin.com/v2/ugcPosts" \
-                -H "Authorization: Bearer ${LINKEDIN_TOKEN}" \
-                -H "Content-Type: application/json" \
-                -H "X-Restli-Protocol-Version: 2.0.0" \
-                -d "$LI_PAYLOAD")
-
-              echo "LinkedIn Response: $LI_RES"
-              echo "✅ Successfully posted to LinkedIn!"
-            fi
+          CANDIDATE=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
+          if [ -n "$CANDIDATE" ]; then
+            POST_TEXT=$(echo "$CANDIDATE" | tr -d '*#"')
+            echo "✅ Successfully generated!"
+          else
+            echo "❌ Gemini generation error: $RESPONSE"
+            exit 1
           fi
