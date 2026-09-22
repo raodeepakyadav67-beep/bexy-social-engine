@@ -1,21 +1,101 @@
-# सबसे पहले आपकी API Key के लिए उपलब्ध सही मॉडल का नाम प्राप्त करना
-          MODEL=$(curl -s "https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY}" | jq -r '.models[] | select(.supportedGenerationMethods[] | contains("generateContent")) | .name' | grep -E 'flash|pro' | head -n 1)
+name: Auto Clinical Post to Telegram & LinkedIn
 
-          if [ -z "$MODEL" ]; then
-            MODEL="models/gemini-1.5-flash-latest"
-          fi
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 1 * * *'
 
-          echo "Using active model: $MODEL"
+jobs:
+  post-clinical-pearl:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Natural Clinical Content and Post
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          LINKEDIN_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
+        run: |
+          TOPICS=(
+            "Arterial Line Damping and Flush Test Pitfalls in ICU"
+            "Noradrenaline vs Vasopressin Titration in Refractory Septic Shock"
+            "Post-CABG Sudden Mediastinal Drain Cessation and Cardiac Tamponade"
+            "Recognizing Patient-Ventilator Asynchrony: Double Triggering"
+            "Neuro ICU: Cerebral Perfusion Pressure (CPP) vs ICP Spike Management"
+            "Electrolyte Emergencies: Rapid Potassium Correction and Cardiac Arrhythmias"
+            "Post-PCI Radial Artery Hematoma and Bedside Compartment Syndrome Watch"
+            "Targeted Temperature Management (TTM) Post-Cardiac Arrest Pearls"
+            "High PEEP Hazards: Right Ventricular Strain and Hemodynamic Collapse"
+            "Bedside CVP Interpretation: Volume Responsiveness vs Fluid Overload"
+          )
 
-          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/${MODEL}:generateContent?key=${GEMINI_API_KEY}" \
+          RANDOM_TOPIC=${TOPICS[$RANDOM % ${#TOPICS[@]}]}
+
+          PROMPT="Act as Deepak Kumar, an MSc Nursing Officer and ICU Specialist. Write a short bedside clinical pearl on: '$RANDOM_TOPIC'. Exactly 4 to 5 punchy lines under 100 words. Real monitor and ICU reality. End with 1-line Bedside Golden Rule. No markdown symbols."
+
+          JSON_PAYLOAD=$(jq -n --arg p "$PROMPT" '{"contents": [{"parts": [{"text": $p}]}], "generationConfig": {"temperature": 0.8, "maxOutputTokens": 200}}')
+
+          # v1 एंडपॉइंट से gemini-1.5-flash को सीधे कॉल करना
+          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}" \
             -H "Content-Type: application/json" \
             -d "$JSON_PAYLOAD")
 
-          CANDIDATE=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
-          if [ -n "$CANDIDATE" ]; then
-            POST_TEXT=$(echo "$CANDIDATE" | tr -d '*#"')
-            echo "✅ Successfully generated!"
-          else
-            echo "❌ Gemini generation error: $RESPONSE"
+          POST_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty' | tr -d '*#"')
+
+          if [ -z "$POST_TEXT" ]; then
+            echo "Direct flash failed, trying fallback model..."
+            RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${GEMINI_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "$JSON_PAYLOAD")
+            POST_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty' | tr -d '*#"')
+          fi
+
+          if [ -z "$POST_TEXT" ]; then
+            echo "API Response Error: $RESPONSE"
             exit 1
+          fi
+
+          echo "Generated Post:"
+          echo "$POST_TEXT"
+
+          # Telegram Post
+          echo "Posting to Telegram..."
+          curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${CHANNEL_ID}" \
+            --data-urlencode "text=${POST_TEXT}"
+
+          # LinkedIn Post
+          if [ -n "$LINKEDIN_TOKEN" ]; then
+            echo "Fetching LinkedIn Profile..."
+            USER_INFO=$(curl -s -X GET "https://api.linkedin.com/v2/userinfo" \
+              -H "Authorization: Bearer ${LINKEDIN_TOKEN}")
+
+            PERSON_ID=$(echo "$USER_INFO" | jq -r '.sub // empty')
+
+            if [ -n "$PERSON_ID" ]; then
+              AUTHOR_URN="urn:li:person:$PERSON_ID"
+              LI_PAYLOAD=$(jq -n \
+                --arg author "$AUTHOR_URN" \
+                --arg text "$POST_TEXT" \
+                '{
+                  author: $author,
+                  lifecycleState: "PUBLISHED",
+                  specificContent: {
+                    "com.linkedin.ugc.ShareContent": {
+                      shareCommentary: { text: $text },
+                      shareMediaCategory: "NONE"
+                    }
+                  },
+                  visibility: {
+                    "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"
+                  }
+                }')
+
+              curl -s -X POST "https://api.linkedin.com/v2/ugcPosts" \
+                -H "Authorization: Bearer ${LINKEDIN_TOKEN}" \
+                -H "Content-Type: application/json" \
+                -H "X-Restli-Protocol-Version: 2.0.0" \
+                -d "$LI_PAYLOAD"
+              echo "LinkedIn Post Sent!"
+            fi
           fi
