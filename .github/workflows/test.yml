@@ -58,12 +58,16 @@ jobs:
           echo "Generated Short Post:"
           echo "$POST_TEXT"
 
-          # 1. Telegram Post
+          # Telegram Post
           echo "Posting to Telegram..."
-          CLEAN_BOT_TOKEN=$(echo "${BOT_TOKEN}" | sed 's/^bot//')
-          curl -s -X POST "https://api.telegram.org/bot${CLEAN_BOT_TOKEN}/sendMessage" \
+          TG_BOT_TOKEN="${BOT_TOKEN#bot}"
+          TG_URL="https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage"
+          
+          TG_RES=$(curl -s -X POST "$TG_URL" \
             -d "chat_id=${CHANNEL_ID}" \
-            --data-urlencode "text=${POST_TEXT}"
+            --data-urlencode "text=${POST_TEXT}")
+            
+          echo "Telegram Response: $TG_RES"
 
           # 2. LinkedIn Post
           if [ -n "$LINKEDIN_TOKEN" ]; then
