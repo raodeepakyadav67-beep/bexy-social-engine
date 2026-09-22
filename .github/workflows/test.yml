@@ -16,77 +16,98 @@ jobs:
           CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
           LINKEDIN_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
         run: |
-          TOPICS=(
-            "Arterial Line Damping and Flush Test Pitfalls in ICU"
-            "Noradrenaline vs Vasopressin Titration in Refractory Septic Shock"
-            "Post-CABG Sudden Mediastinal Drain Cessation and Cardiac Tamponade"
-            "Recognizing Patient-Ventilator Asynchrony: Double Triggering"
-            "Neuro ICU: Cerebral Perfusion Pressure (CPP) vs ICP Spike Management"
-            "Electrolyte Emergencies: Rapid Potassium Correction and Cardiac Arrhythmias"
-            "Post-PCI Radial Artery Hematoma and Bedside Compartment Syndrome Watch"
-            "Targeted Temperature Management (TTM) Post-Cardiac Arrest Pearls"
-            "High PEEP Hazards: Right Ventricular Strain and Hemodynamic Collapse"
-            "Bedside CVP Interpretation: Volume Responsiveness vs Fluid Overload"
+          python3 -c '
+          import os, random, json, urllib.request, urllib.parse
+
+          api_key = os.environ.get("GEMINI_API_KEY", "")
+          bot_token = os.environ.get("BOT_TOKEN", "")
+          channel_id = os.environ.get("CHANNEL_ID", "")
+          li_token = os.environ.get("LINKEDIN_TOKEN", "")
+
+          topics = [
+              "Arterial Line Damping and Flush Test Pitfalls in ICU",
+              "Noradrenaline vs Vasopressin Titration in Refractory Septic Shock",
+              "Post-CABG Sudden Mediastinal Drain Cessation and Cardiac Tamponade",
+              "Recognizing Patient-Ventilator Asynchrony: Double Triggering",
+              "Neuro ICU: Cerebral Perfusion Pressure (CPP) vs ICP Spike Management",
+              "Electrolyte Emergencies: Rapid Potassium Correction and Cardiac Arrhythmias",
+              "Post-PCI Radial Artery Hematoma and Bedside Compartment Syndrome Watch",
+              "Targeted Temperature Management (TTM) Post-Cardiac Arrest Pearls",
+              "High PEEP Hazards: Right Ventricular Strain and Hemodynamic Collapse",
+              "Bedside CVP Interpretation: Volume Responsiveness vs Fluid Overload"
+          ]
+
+          topic = random.choice(topics)
+
+          prompt = (
+              f"Write a pure 4-line bedside clinical pearl on: {topic}. "
+              "Line 1: Monitor observation that books ignore. "
+              "Line 2: Critical titration or drug error to avoid. "
+              "Line 3: Immediate bedside nursing action. "
+              "Line 4: Golden bedside rule. "
+              "Keep it punchy, practical, under 80 words total. Plain text only without any asterisks or hashtags."
           )
 
-          RANDOM_TOPIC="${TOPICS[$RANDOM % ${#TOPICS[@]}]}"
+          # 1. Gemini API Request
+          url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}"
+          payload = {
+              "contents": [{"parts": [{"text": prompt}]}],
+              "generationConfig": {"temperature": 0.7, "maxOutputTokens": 300}
+          }
 
-          PROMPT="Write a pure 4-line bedside clinical pearl on: $RANDOM_TOPIC. Line 1: Monitor observation that books ignore. Line 2: Critical titration or drug error to avoid. Line 3: Immediate bedside nursing action. Line 4: Golden bedside rule. Keep it punchy, practical, under 80 words total. Plain text only without any asterisks or hashtags."
+          req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"})
+          try:
+              with urllib.request.urlopen(req) as resp:
+                  res_data = json.loads(resp.read().decode("utf-8"))
+                  body = res_data["candidates"][0]["content"]["parts"][0]["text"].replace("*", "").replace("#", "").strip()
+          except Exception as e:
+              print(f"Gemini API Error: {e}")
+              exit(1)
 
-          JSON_PAYLOAD=$(jq -n --arg p "$PROMPT" '{"contents": [{"parts": [{"text": $p}]}], "generationConfig": {"temperature": 0.7, "maxOutputTokens": 300}}')
+          full_post = f"🩺 ICU CLINICAL PEARL: {topic}\n\n{body}\n\n— Deepak Kumar | ICU Specialist"
+          print("Generated Short Post:\n", full_post)
 
-          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}" \
-            -H "Content-Type: application/json" \
-            -d "$JSON_PAYLOAD")
+          # 2. Telegram Send
+          tg_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+          tg_data = urllib.parse.urlencode({"chat_id": channel_id, "text": full_post}).encode("utf-8")
+          try:
+              urllib.request.urlopen(urllib.request.Request(tg_url, data=tg_data))
+              print("Telegram Post Sent Successfully!")
+          except Exception as e:
+              print(f"Telegram Error: {e}")
 
-          POST_BODY=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty' | tr -d '*#"')
+          # 3. LinkedIn Send
+          if li_token:
+              try:
+                  req_user = urllib.request.Request("https://api.linkedin.com/v2/userinfo", headers={"Authorization": f"Bearer {li_token}"})
+                  with urllib.request.urlopen(req_user) as r:
+                      u_info = json.loads(r.read().decode("utf-8"))
+                      person_id = u_info.get("sub", "")
 
-          if [ -z "$POST_BODY" ]; then
-            echo "API Error: $RESPONSE"
-            exit 1
-          fi
-
-          POST_TEXT=$(printf "ICU CLINICAL PEARL: %s\n\n%s\n\n— Deepak Kumar | ICU Specialist" "$RANDOM_TOPIC" "$POST_BODY")
-
-          echo "Generated Short Post:"
-          echo "$POST_TEXT"
-
-          echo "Posting to Telegram..."
-          curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-            --data-urlencode "chat_id=${CHANNEL_ID}" \
-            --data-urlencode "text=${POST_TEXT}"
-
-          if [ -n "$LINKEDIN_TOKEN" ]; then
-            echo "Fetching LinkedIn Profile..."
-            USER_INFO=$(curl -s -X GET "https://api.linkedin.com/v2/userinfo" \
-              -H "Authorization: Bearer ${LINKEDIN_TOKEN}")
-
-            PERSON_ID=$(echo "$USER_INFO" | jq -r '.sub // empty')
-
-            if [ -n "$PERSON_ID" ]; then
-              AUTHOR_URN="urn:li:person:$PERSON_ID"
-              LI_PAYLOAD=$(jq -n \
-                --arg author "$AUTHOR_URN" \
-                --arg text "$POST_TEXT" \
-                '{
-                  author: $author,
-                  lifecycleState: "PUBLISHED",
-                  specificContent: {
-                    "com.linkedin.ugc.ShareContent": {
-                      shareCommentary: { text: $text },
-                      shareMediaCategory: "NONE"
-                    }
-                  },
-                  visibility: {
-                    "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"
-                  }
-                }')
-
-              curl -s -X POST "https://api.linkedin.com/v2/ugcPosts" \
-                -H "Authorization: Bearer ${LINKEDIN_TOKEN}" \
-                -H "Content-Type: application/json" \
-                -H "X-Restli-Protocol-Version: 2.0.0" \
-                -d "$LI_PAYLOAD"
-              echo "LinkedIn Post Sent Successfully!"
-            fi
-          fi
+                  if person_id:
+                      author_urn = f"urn:li:person:{person_id}"
+                      li_payload = {
+                          "author": author_urn,
+                          "lifecycleState": "PUBLISHED",
+                          "specificContent": {
+                              "com.linkedin.ugc.ShareContent": {
+                                  "shareCommentary": {"text": full_post},
+                                  "shareMediaCategory": "NONE"
+                              }
+                          },
+                          "visibility": {"com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"}
+                      }
+                      li_req = urllib.request.Request(
+                          "https://api.linkedin.com/v2/ugcPosts",
+                          data=json.dumps(li_payload).encode("utf-8"),
+                          headers={
+                              "Authorization": f"Bearer {li_token}",
+                              "Content-Type": "application/json",
+                              "X-Restli-Protocol-Version": "2.0.0"
+                          }
+                      )
+                      urllib.request.urlopen(li_req)
+                      print("LinkedIn Post Sent Successfully!")
+              except Exception as e:
+                  print(f"LinkedIn Error: {e}")
+          '
