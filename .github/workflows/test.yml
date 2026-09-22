@@ -12,7 +12,7 @@ jobs:
       - name: Generate Natural Clinical Content and Post
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          BOT_TOKEN: "8776734218:AAERo1LHk07laBkY-yVtVq5NBAQ6yCHHyL4"
           CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
           LINKEDIN_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
         run: |
@@ -35,7 +35,7 @@ jobs:
 
           JSON_PAYLOAD=$(jq -n --arg p "$PROMPT" '{"contents": [{"parts": [{"text": $p}]}], "generationConfig": {"temperature": 0.8, "maxOutputTokens": 200}}')
 
-          # Google API द्वारा अनुशंसित नया मॉडल gemini-3.6-flash
+          # Gemini API Call
           RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}" \
             -H "Content-Type: application/json" \
             -d "$JSON_PAYLOAD")
@@ -43,7 +43,7 @@ jobs:
           POST_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty' | tr -d '*#"')
 
           if [ -z "$POST_TEXT" ]; then
-            echo "Direct 3.6-flash failed, trying 3.5 fallback..."
+            echo "Direct flash failed, trying 3.5 fallback..."
             RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}" \
               -H "Content-Type: application/json" \
               -d "$JSON_PAYLOAD")
@@ -58,16 +58,12 @@ jobs:
           echo "Generated Short Post:"
           echo "$POST_TEXT"
 
-          # Telegram Post
+          # 1. Telegram Post (सीधे सही URL के साथ)
           echo "Posting to Telegram..."
-          TG_RES=$(curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-            -d "chat_id=${CHANNEL_ID}" \
+          TG_RES=$(curl -s -X POST "https://api.telegram.org/bot8776734218:AAERo1LHk07laBkY-yVtVq5NBAQ6yCHHyL4/sendMessage" \
+            --data-urlencode "chat_id=${CHANNEL_ID}" \
             --data-urlencode "text=${POST_TEXT}")
-          
-          TG_RES=$(curl -s -X POST "$TG_URL" \
-            -d "chat_id=${CHANNEL_ID}" \
-            --data-urlencode "text=${POST_TEXT}")
-            
+
           echo "Telegram Response: $TG_RES"
 
           # 2. LinkedIn Post
@@ -97,11 +93,12 @@ jobs:
                   }
                 }')
 
-              curl -s -X POST "https://api.linkedin.com/v2/ugcPosts" \
+              LI_RES=$(curl -s -X POST "https://api.linkedin.com/v2/ugcPosts" \
                 -H "Authorization: Bearer ${LINKEDIN_TOKEN}" \
                 -H "Content-Type: application/json" \
                 -H "X-Restli-Protocol-Version: 2.0.0" \
-                -d "$LI_PAYLOAD"
+                -d "$LI_PAYLOAD")
+              echo "LinkedIn Response: $LI_RES"
               echo "LinkedIn Post Sent Successfully!"
             fi
           fi
