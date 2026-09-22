@@ -3,7 +3,7 @@ name: Auto Clinical Post to Telegram & LinkedIn
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 1 * * *'
+    - cron: '0 1 * * *' # रोजाना सुबह 06:30 AM IST (01:00 AM UTC)
 
 jobs:
   post-clinical-pearl:
@@ -35,8 +35,8 @@ jobs:
 
           JSON_PAYLOAD=$(jq -n --arg p "$PROMPT" '{"contents": [{"parts": [{"text": $p}]}], "generationConfig": {"temperature": 0.8, "maxOutputTokens": 200}}')
 
-          # v1 एंडपॉइंट से gemini-1.5-flash को सीधे कॉल करना
-          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}" \
+          # v1 स्टेबल एंडपॉइंट
+          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}" \
             -H "Content-Type: application/json" \
             -d "$JSON_PAYLOAD")
 
@@ -44,7 +44,7 @@ jobs:
 
           if [ -z "$POST_TEXT" ]; then
             echo "Direct flash failed, trying fallback model..."
-            RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${GEMINI_API_KEY}" \
+            RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-pro:generateContent?key=${GEMINI_API_KEY}" \
               -H "Content-Type: application/json" \
               -d "$JSON_PAYLOAD")
             POST_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty' | tr -d '*#"')
@@ -58,13 +58,13 @@ jobs:
           echo "Generated Post:"
           echo "$POST_TEXT"
 
-          # Telegram Post
+          # 1. Telegram Post
           echo "Posting to Telegram..."
           curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${CHANNEL_ID}" \
             --data-urlencode "text=${POST_TEXT}"
 
-          # LinkedIn Post
+          # 2. LinkedIn Post
           if [ -n "$LINKEDIN_TOKEN" ]; then
             echo "Fetching LinkedIn Profile..."
             USER_INFO=$(curl -s -X GET "https://api.linkedin.com/v2/userinfo" \
