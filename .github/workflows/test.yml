@@ -35,36 +35,39 @@ jobs:
 
           JSON_PAYLOAD=$(jq -n --arg p "$PROMPT" '{"contents": [{"parts": [{"text": $p}]}], "generationConfig": {"temperature": 0.8, "maxOutputTokens": 200}}')
 
-          # v1 स्टेबल एंडपॉइंट
-          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}" \
+          # 1. आपकी API Key पर लाइव और एक्टिव मॉडल का नाम अपने आप ढूंढना
+          echo "Fetching active Gemini model for this API key..."
+          ACTIVE_MODEL=$(curl -s "https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY}" | jq -r '.models[] | select(.supportedGenerationMethods[]? == "generateContent") | .name' | head -n 1)
+
+          if [ -z "$ACTIVE_MODEL" ] || [ "$ACTIVE_MODEL" == "null" ]; then
+            echo "Direct fetch fallback, checking v1..."
+            ACTIVE_MODEL="models/gemini-pro"
+          fi
+
+          echo "Using active model: $ACTIVE_MODEL"
+
+          # 2. सही मॉडल से कंटेंट मंगाना
+          RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/${ACTIVE_MODEL}:generateContent?key=${GEMINI_API_KEY}" \
             -H "Content-Type: application/json" \
             -d "$JSON_PAYLOAD")
 
           POST_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty' | tr -d '*#"')
 
           if [ -z "$POST_TEXT" ]; then
-            echo "Direct flash failed, trying fallback model..."
-            RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-pro:generateContent?key=${GEMINI_API_KEY}" \
-              -H "Content-Type: application/json" \
-              -d "$JSON_PAYLOAD")
-            POST_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty' | tr -d '*#"')
-          fi
-
-          if [ -z "$POST_TEXT" ]; then
             echo "API Response Error: $RESPONSE"
             exit 1
           fi
 
-          echo "Generated Post:"
+          echo "Generated Short Post:"
           echo "$POST_TEXT"
 
-          # 1. Telegram Post
+          # 3. Telegram पर पोस्ट भेजना
           echo "Posting to Telegram..."
           curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${CHANNEL_ID}" \
             --data-urlencode "text=${POST_TEXT}"
 
-          # 2. LinkedIn Post
+          # 4. LinkedIn पर पोस्ट भेजना
           if [ -n "$LINKEDIN_TOKEN" ]; then
             echo "Fetching LinkedIn Profile..."
             USER_INFO=$(curl -s -X GET "https://api.linkedin.com/v2/userinfo" \
@@ -96,6 +99,6 @@ jobs:
                 -H "Content-Type: application/json" \
                 -H "X-Restli-Protocol-Version: 2.0.0" \
                 -d "$LI_PAYLOAD"
-              echo "LinkedIn Post Sent!"
+              echo "LinkedIn Post Sent Successfully!"
             fi
           fi
