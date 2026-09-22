@@ -3,7 +3,7 @@ name: Auto Clinical Post to Telegram & LinkedIn
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 1 * * *' # रोज़ाना सुबह 06:30 AM IST
+    - cron: '0 1 * * *' # रोजाना सुबह 06:30 AM IST (01:00 AM UTC)
 
 jobs:
   post-clinical-pearl:
@@ -12,16 +12,16 @@ jobs:
       - name: Generate Natural Clinical Content and Post
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
           LINKEDIN_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
         run: |
-         # 1. रैंडम टॉपिक चुनना ताकि हर बार अलग पोस्ट बने
+          # 1. क्लिनिकल टॉपिक्स लिस्ट
           TOPICS=(
             "Arterial Line Damping and Flush Test Pitfalls in ICU"
             "Noradrenaline vs Vasopressin Titration in Refractory Septic Shock"
             "Post-CABG Sudden Mediastinal Drain Cessation and Cardiac Tamponade"
-            "Recognizing Patient-Ventilator Asynchrony: Double Triggering & Flow Starvation"
+            "Recognizing Patient-Ventilator Asynchrony: Double Triggering"
             "Neuro ICU: Cerebral Perfusion Pressure (CPP) vs ICP Spike Management"
             "Electrolyte Emergencies: Rapid Potassium Correction and Cardiac Arrhythmias"
             "Post-PCI Radial Artery Hematoma and Bedside Compartment Syndrome Watch"
@@ -29,28 +29,30 @@ jobs:
             "High PEEP Hazards: Right Ventricular Strain and Hemodynamic Collapse"
             "Bedside CVP Interpretation: Volume Responsiveness vs Fluid Overload"
           )
+
           RANDOM_TOPIC=${TOPICS[$RANDOM % ${#TOPICS[@]}]}
 
-          PROMPT="Act as Deepak Kumar, an MSc Nursing Officer and Intensive Care Specialist (CTVS, MICU, Neuro ICU).
-            Write an ultra-realistic, practical bedside clinical pearl on: '$RANDOM_TOPIC'.
-            Focus strictly on practical monitor reality, what the monitors show, exact bedside drug titration, and what textbooks miss.
-            Keep it punchy, authoritative, and direct for Telegram and LinkedIn.
-           Do not use generic definitions or AI fluff.
-           Finish with a short 2-line practical bedside takeaway."
+          # 2. छोटा और सटीक 4-5 लाइन का प्रॉम्ट (नो जेनरिक टेक्स्ट)
+          PROMPT="Act as Deepak Kumar, an MSc Nursing Officer and ICU Specialist. Write a short, powerful bedside clinical pearl on: '$RANDOM_TOPIC'.
+          STRICT RULES:
+          1. Exactly 4 to 5 punchy lines (Under 100 words).
+          2. No generic textbook fluff. Give a direct monitor/bedside reality that only an ICU clinician knows.
+          3. End with a 1-line Bedside Golden Rule.
+          4. Format as plain text without asterisks or markdown headers."
 
-          # 2. Temperature 1.0 सेट किया गया ताकि कभी भी रिपीट न हो
+          # 3. JSON पेलोड (टोकन लिमिट के साथ ताकि पोस्ट कभी लंबी न हो)
           JSON_PAYLOAD=$(jq -n \
             --arg prompt "$PROMPT" \
             '{
               contents: [{parts: [{text: $prompt}]}],
               generationConfig: {
-                temperature: 1.0,
-                topP: 0.95
+                temperature: 0.9,
+                maxOutputTokens: 250
               }
             }')
 
           POST_TEXT=""
-          MODELS=("gemini-3.6-flash" "gemini-3.5-flash-lite" "gemini-3.5-flash")
+          MODELS=("gemini-2.5-flash" "gemini-2.0-flash")
           for MODEL in "${MODELS[@]}"; do
             echo "Requesting content from $MODEL..."
             RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}" \
@@ -59,12 +61,12 @@ jobs:
 
             CANDIDATE=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
             if [ -n "$CANDIDATE" ]; then
-              # किसी भी बचे हुए एस्टरिस्क (*) को पूरी तरह साफ़ करना
-              POST_TEXT=$(echo "$CANDIDATE" | tr -d '*')
+              # एस्टरिस्क (*) और बैकस्लैश साफ करना
+              POST_TEXT=$(echo "$CANDIDATE" | tr -d '*#')
               echo "✅ Successfully generated using $MODEL!"
               break
             else
-              echo "⚠️ Model busy, switching to backup..."
+              echo "⚠️ Model busy or failed, trying next..."
               sleep 2
             fi
           done
@@ -77,25 +79,25 @@ jobs:
           echo "Preview of post:"
           echo "$POST_TEXT"
 
-          # 2. Telegram पर साफ़ टेक्स्ट भेजना
-          echo "📤 Posting clean text to Telegram..."
-          TG_RES=$(curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
-            --data-urlencode "chat_id=$CHANNEL_ID" \
-            --data-urlencode "text=$POST_TEXT")
+          # 4. Telegram पर पोस्ट भेजना
+          echo "🚀 Posting clean text to Telegram..."
+          TG_RES=$(curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${CHANNEL_ID}" \
+            --data-urlencode "text=${POST_TEXT}")
           echo "Telegram Response: $TG_RES"
 
-          # 3. LinkedIn पर पोस्ट भेजना
+          # 5. LinkedIn पर पोस्ट भेजना
           if [ -n "$LINKEDIN_TOKEN" ]; then
-            echo "📤 Fetching LinkedIn Profile ID..."
+            echo "🚀 Fetching LinkedIn Profile ID..."
             USER_INFO=$(curl -s -X GET "https://api.linkedin.com/v2/userinfo" \
-              -H "Authorization: Bearer $LINKEDIN_TOKEN")
-            
+              -H "Authorization: Bearer ${LINKEDIN_TOKEN}")
+
             PERSON_ID=$(echo "$USER_INFO" | jq -r '.sub // empty')
-            
+
             if [ -n "$PERSON_ID" ]; then
               AUTHOR_URN="urn:li:person:$PERSON_ID"
 
-              echo "📤 Posting to LinkedIn..."
+              echo "🚀 Posting to LinkedIn..."
               LI_PAYLOAD=$(jq -n \
                 --arg author "$AUTHOR_URN" \
                 --arg text "$POST_TEXT" \
@@ -114,7 +116,7 @@ jobs:
                 }')
 
               LI_RES=$(curl -s -X POST "https://api.linkedin.com/v2/ugcPosts" \
-                -H "Authorization: Bearer $LINKEDIN_TOKEN" \
+                -H "Authorization: Bearer ${LINKEDIN_TOKEN}" \
                 -H "Content-Type: application/json" \
                 -H "X-Restli-Protocol-Version: 2.0.0" \
                 -d "$LI_PAYLOAD")
