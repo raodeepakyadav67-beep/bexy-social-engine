@@ -32,27 +32,27 @@ jobs:
 
           RANDOM_TOPIC=${TOPICS[$RANDOM % ${#TOPICS[@]}]}
 
-          # 2. छोटा और सटीक 4-5 लाइन का प्रॉम्ट (नो जेनरिक टेक्स्ट)
+          # 2. छोटा और सटीक 4-5 लाइन का प्रॉम्ट
           PROMPT="Act as Deepak Kumar, an MSc Nursing Officer and ICU Specialist. Write a short, powerful bedside clinical pearl on: '$RANDOM_TOPIC'.
           STRICT RULES:
           1. Exactly 4 to 5 punchy lines (Under 100 words).
           2. No generic textbook fluff. Give a direct monitor/bedside reality that only an ICU clinician knows.
           3. End with a 1-line Bedside Golden Rule.
-          4. Format as plain text without asterisks or markdown headers."
+          4. Format as plain text without asterisks, quotes, or markdown headers."
 
-          # 3. JSON पेलोड (टोकन लिमिट के साथ ताकि पोस्ट कभी लंबी न हो)
+          # 3. JSON पेलोड
           JSON_PAYLOAD=$(jq -n \
             --arg prompt "$PROMPT" \
             '{
               contents: [{parts: [{text: $prompt}]}],
               generationConfig: {
-                temperature: 0.9,
+                temperature: 0.8,
                 maxOutputTokens: 250
               }
             }')
 
           POST_TEXT=""
-          MODELS=("gemini-2.5-flash" "gemini-2.0-flash")
+          MODELS=("gemini-1.5-flash" "gemini-1.5-pro")
           for MODEL in "${MODELS[@]}"; do
             echo "Requesting content from $MODEL..."
             RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}" \
@@ -61,8 +61,7 @@ jobs:
 
             CANDIDATE=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty')
             if [ -n "$CANDIDATE" ]; then
-              # एस्टरिस्क (*) और बैकस्लैश साफ करना
-              POST_TEXT=$(echo "$CANDIDATE" | tr -d '*#')
+              POST_TEXT=$(echo "$CANDIDATE" | tr -d '*#"')
               echo "✅ Successfully generated using $MODEL!"
               break
             else
