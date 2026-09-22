@@ -60,8 +60,9 @@ jobs:
 
           # 1. Telegram Post
           echo "Posting to Telegram..."
-          curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-            --data-urlencode "chat_id=${CHANNEL_ID}" \
+          CLEAN_BOT_TOKEN=$(echo "${BOT_TOKEN}" | sed 's/^bot//')
+          curl -s -X POST "https://api.telegram.org/bot${CLEAN_BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${CHANNEL_ID}" \
             --data-urlencode "text=${POST_TEXT}"
 
           # 2. LinkedIn Post
