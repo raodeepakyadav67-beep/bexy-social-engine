@@ -2,7 +2,7 @@ name: Tumblr Daily Automation
 
 on:
   schedule:
-    # रोज़ सुबह ठीक 6:30 AM IST (01:00 UTC)
+    # रोज़ सुबह 6:30 AM IST (01:00 UTC)
     - cron: '0 1 * * *'
   workflow_dispatch:
 
