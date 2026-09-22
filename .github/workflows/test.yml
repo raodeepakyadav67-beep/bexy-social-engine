@@ -3,7 +3,7 @@ name: Auto Clinical Post to Telegram & LinkedIn
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 1 * * *' # रोजाना सुबह 06:30 AM IST (01:00 AM UTC)
+    - cron: '0 1 * * *'
 
 jobs:
   post-clinical-pearl:
@@ -29,20 +29,11 @@ jobs:
             "Bedside CVP Interpretation: Volume Responsiveness vs Fluid Overload"
           )
 
-          RANDOM_TOPIC=${TOPICS[$RANDOM % ${#TOPICS[@]}]}
+          RANDOM_TOPIC="${TOPICS[$RANDOM % ${#TOPICS[@]}]}"
 
-          # सीधा और कड़क प्रॉम्ट (बिना किसी नाम या रोल-प्ले कन्फ्यूजन के)
-          PROMPT="Write a pure 4-line ICU bedside clinical pearl on: $RANDOM_TOPIC.
-          Structure:
-          - Line 1: Real-world monitor/bedside observation that books ignore.
-          - Line 2: Critical titration or drug error to prevent.
-          - Line 3: Immediate bedside nursing action.
-          - Line 4: Golden Clinical Rule.
-          Requirements:
-          - Total 50-80 words only.
-          - No introductions, no names, no titles, no markdown symbols (* or #), plain concise text only."
+          PROMPT="Write a pure 4-line bedside clinical pearl on: $RANDOM_TOPIC. Line 1: Monitor observation that books ignore. Line 2: Critical titration or drug error to avoid. Line 3: Immediate bedside nursing action. Line 4: Golden bedside rule. Keep it punchy, practical, under 80 words total. Plain text only without any asterisks or hashtags."
 
-          JSON_PAYLOAD=$(jq -n --arg p "$PROMPT" '{"contents": [{"parts": [{"text": $p}]}], "generationConfig": {"temperature": 0.7, "maxOutputTokens": 400}}')
+          JSON_PAYLOAD=$(jq -n --arg p "$PROMPT" '{"contents": [{"parts": [{"text": $p}]}], "generationConfig": {"temperature": 0.7, "maxOutputTokens": 300}}')
 
           RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}" \
             -H "Content-Type: application/json" \
@@ -55,23 +46,16 @@ jobs:
             exit 1
           fi
 
-          # पोस्ट के ऊपर आपका ऑथेंटिक हेडर और नीचे क्लिनिकल सिग्नेचर
-          POST_TEXT="🩺 ICU CLINICAL PEARL: ${RANDOM_TOPIC}
-
-${POST_BODY}
-
-— Deepak Kumar | ICU Specialist"
+          POST_TEXT=$(printf "ICU CLINICAL PEARL: %s\n\n%s\n\n— Deepak Kumar | ICU Specialist" "$RANDOM_TOPIC" "$POST_BODY")
 
           echo "Generated Short Post:"
           echo "$POST_TEXT"
 
-          # 1. Telegram Post
           echo "Posting to Telegram..."
-          curl -s -X POST "https://api.telegram.org/bot8776734218:AAERo1LHk07laBkY-yVtVq5NBAQ6yCHHyL4/sendMessage" \
+          curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${CHANNEL_ID}" \
             --data-urlencode "text=${POST_TEXT}"
 
-          # 2. LinkedIn Post
           if [ -n "$LINKEDIN_TOKEN" ]; then
             echo "Fetching LinkedIn Profile..."
             USER_INFO=$(curl -s -X GET "https://api.linkedin.com/v2/userinfo" \
