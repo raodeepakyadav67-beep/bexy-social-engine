@@ -60,8 +60,9 @@ jobs:
 
           # Telegram Post
           echo "Posting to Telegram..."
-          TG_BOT_TOKEN="${BOT_TOKEN#bot}"
-          TG_URL="https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage"
+          TG_RES=$(curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${CHANNEL_ID}" \
+            --data-urlencode "text=${POST_TEXT}")
           
           TG_RES=$(curl -s -X POST "$TG_URL" \
             -d "chat_id=${CHANNEL_ID}" \
