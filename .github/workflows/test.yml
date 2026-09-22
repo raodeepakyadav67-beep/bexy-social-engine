@@ -31,40 +31,45 @@ jobs:
 
           RANDOM_TOPIC=${TOPICS[$RANDOM % ${#TOPICS[@]}]}
 
-          PROMPT="Act as Deepak Kumar, an MSc Nursing Officer and ICU Specialist. Write a short bedside clinical pearl on: '$RANDOM_TOPIC'. Exactly 4 to 5 punchy lines under 100 words. Real monitor and ICU reality. End with 1-line Bedside Golden Rule. No markdown symbols."
+          # सीधा और कड़क प्रॉम्ट (बिना किसी नाम या रोल-प्ले कन्फ्यूजन के)
+          PROMPT="Write a pure 4-line ICU bedside clinical pearl on: $RANDOM_TOPIC.
+          Structure:
+          - Line 1: Real-world monitor/bedside observation that books ignore.
+          - Line 2: Critical titration or drug error to prevent.
+          - Line 3: Immediate bedside nursing action.
+          - Line 4: Golden Clinical Rule.
+          Requirements:
+          - Total 50-80 words only.
+          - No introductions, no names, no titles, no markdown symbols (* or #), plain concise text only."
 
-          JSON_PAYLOAD=$(jq -n --arg p "$PROMPT" '{"contents": [{"parts": [{"text": $p}]}], "generationConfig": {"temperature": 0.8, "maxOutputTokens": 200}}')
+          JSON_PAYLOAD=$(jq -n --arg p "$PROMPT" '{"contents": [{"parts": [{"text": $p}]}], "generationConfig": {"temperature": 0.7, "maxOutputTokens": 400}}')
 
-          # Gemini API Call
           RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}" \
             -H "Content-Type: application/json" \
             -d "$JSON_PAYLOAD")
 
-          POST_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty' | tr -d '*#"')
+          POST_BODY=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty' | tr -d '*#"')
 
-          if [ -z "$POST_TEXT" ]; then
-            echo "Direct flash failed, trying 3.5 fallback..."
-            RESPONSE=$(curl -s -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}" \
-              -H "Content-Type: application/json" \
-              -d "$JSON_PAYLOAD")
-            POST_TEXT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text // empty' | tr -d '*#"')
-          fi
-
-          if [ -z "$POST_TEXT" ]; then
-            echo "API Response Error: $RESPONSE"
+          if [ -z "$POST_BODY" ]; then
+            echo "API Error: $RESPONSE"
             exit 1
           fi
+
+          # पोस्ट के ऊपर आपका ऑथेंटिक हेडर और नीचे क्लिनिकल सिग्नेचर
+          POST_TEXT="🩺 ICU CLINICAL PEARL: ${RANDOM_TOPIC}
+
+${POST_BODY}
+
+— Deepak Kumar | ICU Specialist"
 
           echo "Generated Short Post:"
           echo "$POST_TEXT"
 
-          # 1. Telegram Post (सीधे सही URL के साथ)
+          # 1. Telegram Post
           echo "Posting to Telegram..."
-          TG_RES=$(curl -s -X POST "https://api.telegram.org/bot8776734218:AAERo1LHk07laBkY-yVtVq5NBAQ6yCHHyL4/sendMessage" \
+          curl -s -X POST "https://api.telegram.org/bot8776734218:AAERo1LHk07laBkY-yVtVq5NBAQ6yCHHyL4/sendMessage" \
             --data-urlencode "chat_id=${CHANNEL_ID}" \
-            --data-urlencode "text=${POST_TEXT}")
-
-          echo "Telegram Response: $TG_RES"
+            --data-urlencode "text=${POST_TEXT}"
 
           # 2. LinkedIn Post
           if [ -n "$LINKEDIN_TOKEN" ]; then
@@ -93,12 +98,11 @@ jobs:
                   }
                 }')
 
-              LI_RES=$(curl -s -X POST "https://api.linkedin.com/v2/ugcPosts" \
+              curl -s -X POST "https://api.linkedin.com/v2/ugcPosts" \
                 -H "Authorization: Bearer ${LINKEDIN_TOKEN}" \
                 -H "Content-Type: application/json" \
                 -H "X-Restli-Protocol-Version: 2.0.0" \
-                -d "$LI_PAYLOAD")
-              echo "LinkedIn Response: $LI_RES"
+                -d "$LI_PAYLOAD"
               echo "LinkedIn Post Sent Successfully!"
             fi
           fi
